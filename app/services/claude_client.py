@@ -1,21 +1,23 @@
 """
-Claude APIとのやり取りを担当するクライアント。
+Gemini API とのやり取りを担当するクライアント。
 チャート画像分析・改善提案生成の両方で使い回す。
+(元はClaude APIを使用していたが、無料枠のあるGemini APIに変更)
 """
-import base64
 import json
-from anthropic import Anthropic
+import google.generativeai as genai
 from app.core.config import settings
 
-_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY) if settings.ANTHROPIC_API_KEY else None
+_configured = False
 
 
-def _get_client() -> Anthropic:
-    global _client
-    if _client is None:
-        _client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-    return _client
+def _ensure_configured():
+    global _configured
+    if not _configured:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        _configured = True
 
+
+MODEL_NAME = "gemini-2.0-flash"
 
 CHART_ANALYSIS_SYSTEM_PROMPT = """\
 あなたはFXチャート分析の専門家です。送られたTradingViewのチャート画像を分析し、
@@ -57,70 +59,46 @@ IMPROVEMENT_SYSTEM_PROMPT = """\
 
 
 def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png") -> dict:
-    """チャート画像をClaudeに送り、構造化された分析結果を取得する"""
-    client = _get_client()
-    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    """チャート画像をGeminiに送り、構造化された分析結果を取得する"""
+    _ensure_configured()
+    model = genai.GenerativeModel(
+        MODEL_NAME,
+        system_instruction=CHART_ANALYSIS_SYSTEM_PROMPT,
+    )
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        system=CHART_ANALYSIS_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": b64_image,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": "このチャート画像を分析してください。",
-                    },
-                ],
-            }
+    response = model.generate_content(
+        [
+            {"mime_type": media_type, "data": image_bytes},
+            "このチャート画像を分析してください。",
         ],
+        generation_config={"max_output_tokens": 2000},
     )
 
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
-    )
+    raw_text = response.text
     parsed = _safe_json_parse(raw_text)
     parsed["_raw_response"] = raw_text
     return parsed
 
 
 def generate_improvement_suggestions(stats_summary: dict) -> dict:
-    """統計データをもとに改善提案をClaudeに生成させる"""
-    client = _get_client()
-
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        system=IMPROVEMENT_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    "以下は過去のトレード統計データです。JSON形式で改善提案をしてください。\n\n"
-                    + json.dumps(stats_summary, ensure_ascii=False, default=str)
-                ),
-            }
-        ],
+    """統計データをもとに改善提案をGeminiに生成させる"""
+    _ensure_configured()
+    model = genai.GenerativeModel(
+        MODEL_NAME,
+        system_instruction=IMPROVEMENT_SYSTEM_PROMPT,
     )
 
-    raw_text = "".join(
-        block.text for block in response.content if block.type == "text"
+    response = model.generate_content(
+        "以下は過去のトレード統計データです。JSON形式で改善提案をしてください。\n\n"
+        + json.dumps(stats_summary, ensure_ascii=False, default=str),
+        generation_config={"max_output_tokens": 2000},
     )
-    return _safe_json_parse(raw_text)
+
+    return _safe_json_parse(response.text)
 
 
 def _safe_json_parse(raw_text: str) -> dict:
-    """Claudeのレスポンスからjsonを安全に取り出す(コードブロック等が混ざっても対応)"""
+    """Geminiのレスポンスからjsonを安全に取り出す(コードブロック等が混ざっても対応)"""
     text = raw_text.strip()
     if text.startswith("```"):
         text = text.strip("`")
@@ -129,5 +107,4 @@ def _safe_json_parse(raw_text: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # パース失敗時は生データを添えてエラーを示す
         return {"error": "JSON解析に失敗しました", "raw": raw_text}
