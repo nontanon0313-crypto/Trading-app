@@ -17,7 +17,7 @@ def _ensure_configured():
         _configured = True
 
 
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 CHART_ANALYSIS_SYSTEM_PROMPT = """\
 あなたはFXチャート分析の専門家です。送られたTradingViewのチャート画像を分析し、
