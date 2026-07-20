@@ -12,8 +12,8 @@ class Settings:
         "DATABASE_URL", "sqlite:///./data/fx_trade.db"
     )
 
-    # Claude APIキー(チャート分析・改善提案に使用)
-    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    # Claude APIキー(チャート分析・改善提案に使用、無料枠あり)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
     # CORS設定(PWAフロントエンドからのアクセスを許可するドメイン)
     ALLOWED_ORIGINS: list[str] = os.getenv(
