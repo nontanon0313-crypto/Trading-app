@@ -1,58 +1,36 @@
-# FXトレード検証ツール - バックエンド
+# FX Trade Lab - フロントエンド(PWA)
 
-TradingViewのチャート画像とGMOクリック証券のトレード結果を使い、
-FXトレードの検証・統計・改善提案を行うツールのバックエンド(API)です。
+スマホのブラウザで動く軽量Webアプリです。ホーム画面に追加するとアプリのように使えます。
 
-## 機能
+## 画面構成
 
-- `POST /api/chart-analysis/` チャート画像をアップロードしてAI分析(エントリー/損切り/利確など)
-- `POST /api/trades/` トレード記録の登録
-- `POST /api/verifications/` 分析結果と実トレードの検証記録
-- `GET /api/statistics/` 勝率・PF・最大DDなどの統計
-- `GET /api/improvement/` AIによる改善提案
+- **分析タブ**: チャート画像をアップロード → AIが分析(エントリー/損切り/利確など)
+- **記録タブ**: 実トレードの記録・一覧表示
+- **統計タブ**: 勝率・PF・最大DDなどの統計、AI改善提案
 
-## ローカルでの起動(参考)
+## セットアップ(GitHub Pagesで無料公開)
 
-```bash
-pip install -r requirements.txt
-cp .env.example .env   # ANTHROPIC_API_KEYを設定する
-uvicorn app.main:app --reload
+1. このフォルダの中身を、バックエンドと同じ(または別の)GitHubリポジトリのルート、もしくは `docs/` フォルダにアップロードする
+2. GitHubリポジトリの「Settings」→「Pages」を開く
+3. 「Source」で対象のブランチ・フォルダを選択して保存
+4. 数分後、`https://ユーザー名.github.io/リポジトリ名/` でアクセスできるようになる
+
+## バックエンドとの接続設定(重要)
+
+`js/api.js` の中の `API_BASE` が、Renderにデプロイしたバックエンドの実際のURLになっているか確認してください。
+
+```js
+const API_BASE = "https://trading-app-5c7s.onrender.com";
 ```
 
-起動後、`http://localhost:8000/docs` でAPIの動作確認ができます。
-
-## 無料クラウドへのデプロイ(Render想定・Android端末のみでもOK)
-
-1. このリポジトリをGitHubにpushする(GitHub Webエディタでも可)
-2. [render.com](https://render.com) にアクセスし、GitHubアカウントでログイン
-3. 「New +」→「Web Service」を選択し、このリポジトリを接続
-4. 設定項目
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-5. Environment Variables に `ANTHROPIC_API_KEY` を追加
-6. Deployを実行 → 発行されたURL(例: `https://xxxx.onrender.com`)がAPIのアドレスになる
-
-これで、スマホのブラウザ(PWAフロントエンド)からこのURLにアクセスして利用できます。
-
-※Renderの無料プランはしばらく使わないとスリープするため、初回アクセス時に起動待ちが発生することがあります。
-
-## ディレクトリ構成
+また、Render側の環境変数 `ALLOWED_ORIGINS` に、GitHub PagesのURLを追加してください(CORSエラー防止のため)。例:
 
 ```
-fx_trade_backend/
-├── app/
-│   ├── main.py              # エントリーポイント
-│   ├── api/                 # 各機能のAPIエンドポイント
-│   ├── services/            # AI連携・統計計算などのロジック
-│   ├── db/                  # DBモデル・接続設定
-│   └── core/                # 設定(環境変数)
-├── tests/
-├── requirements.txt
-└── .env.example
+ALLOWED_ORIGINS=https://ユーザー名.github.io
 ```
 
-## 次のステップ
+## スマホのホーム画面に追加する
 
-- PWAフロントエンド(HTML/JS)の作成
-- チャート/トレード履歴画像アップロード画面
-- 統計・改善提案の表示画面
+1. Chromeでこのアプリを開く
+2. 右上の「⋮」メニュー →「ホーム画面に追加」
+3. 追加すると、アプリのようにアイコンから起動できる

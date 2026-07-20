@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0F14">
+<title>FX Trade Lab</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="10" width="3" height="9" fill="#2FBF71"/>
+      <line x1="4.5" y1="4" x2="4.5" y2="10" stroke="#2FBF71" stroke-width="1.5"/>
+      <line x1="4.5" y1="19" x2="4.5" y2="22" stroke="#2FBF71" stroke-width="1.5"/>
+      <rect x="10.5" y="6" width="3" height="6" fill="#E5484D"/>
+      <line x1="12" y1="2" x2="12" y2="6" stroke="#E5484D" stroke-width="1.5"/>
+      <line x1="12" y1="12" x2="12" y2="16" stroke="#E5484D" stroke-width="1.5"/>
+      <rect x="18" y="13" width="3" height="7" fill="#2FBF71"/>
+      <line x1="19.5" y1="9" x2="19.5" y2="13" stroke="#2FBF71" stroke-width="1.5"/>
+      <line x1="19.5" y1="20" x2="19.5" y2="23" stroke="#2FBF71" stroke-width="1.5"/>
+    </svg>
+    <span>FX Trade Lab</span>
+  </div>
+  <div class="api-status" id="apiStatus">
+    <span class="dot" id="apiDot"></span>
+    <span id="apiStatusText">接続確認中</span>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- ① チャート分析 -->
+  <section class="view" id="view-analysis" data-view="analysis">
+    <h1>チャート分析</h1>
+    <p class="lede">TradingViewのチャート画像をアップロードすると、AIがエントリー・損切り・利確を判定します。</p>
+
+    <div class="upload-card" id="uploadCard">
+      <input type="file" id="chartFileInput" accept="image/*" capture="environment" hidden>
+      <div class="upload-drop" id="uploadDrop">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7C8B99" stroke-width="1.6">
+          <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p>タップして画像を選択</p>
+        <span class="hint">またはカメラで撮影</span>
+      </div>
+      <img id="chartPreview" class="chart-preview" hidden>
+      <button class="btn btn-primary" id="analyzeBtn" hidden>この画像を分析する</button>
+    </div>
+
+    <div class="result-card" id="analysisResult" hidden></div>
+
+    <h2 class="section-title">分析履歴</h2>
+    <div id="analysisHistory" class="list"></div>
+  </section>
+
+  <!-- ② トレード記録 -->
+  <section class="view" id="view-trades" data-view="trades" hidden>
+    <h1>トレード記録</h1>
+    <p class="lede">GMOクリック証券の実績を入力して記録します。</p>
+
+    <form class="card form-card" id="tradeForm">
+      <div class="field">
+        <label>通貨ペア</label>
+        <input type="text" name="currency_pair" placeholder="USDJPY" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>エントリー価格</label>
+          <input type="number" step="0.001" name="entry_price" required>
+        </div>
+        <div class="field">
+          <label>決済価格</label>
+          <input type="number" step="0.001" name="exit_price">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>損益</label>
+          <input type="number" step="0.01" name="profit_loss">
+        </div>
+        <div class="field">
+          <label>ロット</label>
+          <input type="number" step="0.01" name="lot_size">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>エントリー日時</label>
+          <input type="datetime-local" name="entry_datetime">
+        </div>
+        <div class="field">
+          <label>決済日時</label>
+          <input type="datetime-local" name="exit_datetime">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">記録を保存</button>
+    </form>
+
+    <h2 class="section-title">記録一覧</h2>
+    <div id="tradesList" class="list"></div>
+  </section>
+
+  <!-- ③ 統計・改善提案 -->
+  <section class="view" id="view-stats" data-view="stats" hidden>
+    <h1>統計・改善提案</h1>
+
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <h2 class="section-title">内訳</h2>
+    <div id="statsBreakdown" class="list"></div>
+
+    <button class="btn btn-secondary" id="improvementBtn">AIに改善提案をもらう</button>
+    <div class="result-card" id="improvementResult" hidden></div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button class="tab active" data-view="analysis">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17l6-6 4 4 8-8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>分析</span>
+  </button>
+  <button class="tab" data-view="trades">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h5" stroke-linecap="round"/></svg>
+    <span>記録</span>
+  </button>
+  <button class="tab" data-view="stats">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 19V9M12 19V5M19 19v-6" stroke-linecap="round"/></svg>
+    <span>統計</span>
+  </button>
+</nav>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
