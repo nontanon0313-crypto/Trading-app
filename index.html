@@ -60,11 +60,28 @@
     <div id="analysisHistory" class="list"></div>
   </section>
 
-  <!-- ② トレード記録 -->
+<!-- ② トレード記録 -->
   <section class="view" id="view-trades" data-view="trades" hidden>
     <h1>トレード記録</h1>
-    <p class="lede">GMOクリック証券の実績を入力して記録します。</p>
+    <p class="lede">GMOクリック証券の約定履歴画面を撮影・アップロードすると、AIが自動で読み取って記録します。</p>
 
+    <div class="upload-card">
+      <input type="file" id="tradeImageInput" accept="image/*" hidden>
+      <div class="upload-drop" id="tradeUploadDrop">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7C8B99" stroke-width="1.6">
+          <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p>約定履歴のスクリーンショットを選択</p>
+        <span class="hint">複数行まとめて自動登録されます</span>
+      </div>
+      <img id="tradeImagePreview" class="chart-preview" hidden>
+      <button class="btn btn-primary" id="tradeAnalyzeBtn" hidden>この画像から記録を読み取る</button>
+    </div>
+
+    <div class="result-card" id="tradeImportResult" hidden></div>
+
+    <h2 class="section-title">手動で入力する</h2>
     <form class="card form-card" id="tradeForm">
       <div class="field">
         <label>通貨ペア</label>
@@ -106,7 +123,7 @@
     <h2 class="section-title">記録一覧</h2>
     <div id="tradesList" class="list"></div>
   </section>
-
+  
   <!-- ③ 統計・改善提案 -->
   <section class="view" id="view-stats" data-view="stats" hidden>
     <h1>統計・改善提案</h1>
