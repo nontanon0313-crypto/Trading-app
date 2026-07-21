@@ -129,7 +129,6 @@ TRADE_HISTORY_SYSTEM_PROMPT = """\
 画面に表示されている行はすべて含めてください。読み取れない項目はnullにしてください。
 """
 
-
 def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
     """約定履歴画像をGeminiに送り、行データのリストを取得する"""
     _ensure_configured()
@@ -147,13 +146,23 @@ def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> lis
     )
 
     raw_text = response.text.strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text.strip("`")
-        if raw_text.lower().startswith("json"):
-            raw_text = raw_text[4:]
+    json_str = _extract_json_array(raw_text)
     try:
-        result = json.loads(raw_text)
+        result = json.loads(json_str)
         return result if isinstance(result, list) else []
     except json.JSONDecodeError:
-        return []
+        raise RuntimeError(f"AI応答の解析に失敗しました。応答内容: {raw_text[:400]}")
 
+
+def _extract_json_array(text: str) -> str:
+    """コードブロックや前置き文が混ざっていても、JSON配列部分だけを取り出す"""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return text[start:end + 1]
+    return text
