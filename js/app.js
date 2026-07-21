@@ -136,6 +136,50 @@ async function loadAnalysisHistory() {
   }
 }
 
+// ---------- ②トレード記録(画像から自動読み取り) ----------
+const tradeImageInput = document.getElementById("tradeImageInput");
+const tradeUploadDrop = document.getElementById("tradeUploadDrop");
+const tradeImagePreview = document.getElementById("tradeImagePreview");
+const tradeAnalyzeBtn = document.getElementById("tradeAnalyzeBtn");
+const tradeImportResult = document.getElementById("tradeImportResult");
+
+let selectedTradeImage = null;
+
+tradeUploadDrop.addEventListener("click", () => tradeImageInput.click());
+
+tradeImageInput.addEventListener("change", () => {
+  const file = tradeImageInput.files[0];
+  if (!file) return;
+  selectedTradeImage = file;
+  tradeImagePreview.src = URL.createObjectURL(file);
+  tradeImagePreview.hidden = false;
+  tradeAnalyzeBtn.hidden = false;
+  tradeImportResult.hidden = true;
+});
+
+tradeAnalyzeBtn.addEventListener("click", async () => {
+  if (!selectedTradeImage) return;
+  tradeAnalyzeBtn.disabled = true;
+  tradeAnalyzeBtn.textContent = "読み取り中...";
+  try {
+    const result = await Api.createTradesFromImage(selectedTradeImage);
+    tradeImportResult.hidden = false;
+    tradeImportResult.innerHTML = `
+      <div class="reason-block">
+        <span class="k">結果</span>
+        ${result.created_count}件の記録を追加しました${result.skipped_count ? `(${result.skipped_count}件は情報不足のためスキップ)` : ""}
+      </div>
+    `;
+    loadTrades();
+  } catch (e) {
+    tradeImportResult.hidden = false;
+    tradeImportResult.innerHTML = `<div class="reason-block">${escapeHtml(e.message)}</div>`;
+  } finally {
+    tradeAnalyzeBtn.disabled = false;
+    tradeAnalyzeBtn.textContent = "この画像から記録を読み取る";
+  }
+});
+
 // ---------- ②トレード記録 ----------
 const tradeForm = document.getElementById("tradeForm");
 
