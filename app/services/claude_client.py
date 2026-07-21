@@ -108,3 +108,52 @@ def _safe_json_parse(raw_text: str) -> dict:
         return json.loads(text)
     except json.JSONDecodeError:
         return {"error": "JSON解析に失敗しました", "raw": raw_text}
+
+TRADE_HISTORY_SYSTEM_PROMPT = """\
+あなたは証券会社の約定履歴画面を読み取る専門家です。GMOクリック証券などの取引アプリの
+「約定履歴」画面のスクリーンショットが渡されます。表の各行を読み取り、
+必ず以下のJSON配列形式のみで回答してください。前置きや説明文は不要です。
+
+[
+  {
+    "row_type": "open または close (新規注文の行はopen、決済注文の行はclose)",
+    "currency_pair": "銘柄名(例: USDJPY, 銀スポットなど画面に表示されている名称そのまま)",
+    "side": "buy または sell (買/売)",
+    "price": 約定価格(数値),
+    "quantity": 約定数量(数値),
+    "datetime": "約定日時。ISO8601形式(YYYY-MM-DDTHH:MM:SS)に変換。年が画面になければ今年と仮定",
+    "profit_loss": "受渡金額・損益(数値)。決済行のみ、読み取れなければnull"
+  }
+]
+
+画面に表示されている行はすべて含めてください。読み取れない項目はnullにしてください。
+"""
+
+
+def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
+    """約定履歴画像をGeminiに送り、行データのリストを取得する"""
+    _ensure_configured()
+    model = genai.GenerativeModel(
+        MODEL_NAME,
+        system_instruction=TRADE_HISTORY_SYSTEM_PROMPT,
+    )
+
+    response = model.generate_content(
+        [
+            {"mime_type": media_type, "data": image_bytes},
+            "この約定履歴の画像を読み取ってください。",
+        ],
+        generation_config={"max_output_tokens": 3000},
+    )
+
+    raw_text = response.text.strip()
+    if raw_text.startswith("```"):
+        raw_text = raw_text.strip("`")
+        if raw_text.lower().startswith("json"):
+            raw_text = raw_text[4:]
+    try:
+        result = json.loads(raw_text)
+        return result if isinstance(result, list) else []
+    except json.JSONDecodeError:
+        return []
+
