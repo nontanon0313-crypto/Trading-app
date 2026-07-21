@@ -42,6 +42,20 @@ const Api = {
     return res.json();
   },
 
+  async createTradesFromImage(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/api/trades/from-image`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "画像からの読み取りに失敗しました");
+    }
+    return res.json();
+  },
+
   async listTrades() {
     const res = await fetch(`${API_BASE}/api/trades/?limit=50`);
     if (!res.ok) throw new Error("記録一覧の取得に失敗しました");
