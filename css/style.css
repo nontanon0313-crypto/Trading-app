@@ -84,6 +84,7 @@ h1 { font-size: 1.5rem; padding: 20px 20px 0; }
 .btn-primary { background: var(--accent); color: #06101F; }
 .btn-primary:active { opacity: 0.85; }
 .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); margin: 20px 20px 0; width: calc(100% - 40px); }
+.btn-danger { background: transparent; color: var(--short); border: 1px solid var(--short); margin: 12px 20px 0; width: calc(100% - 40px); }
 .btn:disabled { opacity: 0.5; }
 
 .card {
