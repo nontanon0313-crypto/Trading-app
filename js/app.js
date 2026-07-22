@@ -180,29 +180,6 @@ tradeAnalyzeBtn.addEventListener("click", async () => {
   }
 });
 
-// ---------- ②トレード記録 ----------
-const tradeForm = document.getElementById("tradeForm");
-
-tradeForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const formData = new FormData(tradeForm);
-  const payload = {};
-  for (const [key, value] of formData.entries()) {
-    if (value === "") continue;
-    if (["entry_price", "exit_price", "profit_loss", "lot_size"].includes(key)) {
-      payload[key] = parseFloat(value);
-    } else {
-      payload[key] = value;
-    }
-  }
-  try {
-    await Api.createTrade(payload);
-    tradeForm.reset();
-    loadTrades();
-  } catch (e) {
-    alert(e.message);
-  }
-});
 
 async function loadTrades() {
   const container = document.getElementById("tradesList");
