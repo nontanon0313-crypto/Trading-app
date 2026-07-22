@@ -76,4 +76,10 @@ const Api = {
     }
     return res.json();
   },
+  
+  async clearAllData() {
+    const res = await fetch(`${API_BASE}/api/admin/clear-data`, { method: "DELETE" });
+    if (!res.ok) throw new Error("データの削除に失敗しました");
+    return res.json();
+  },
 };
