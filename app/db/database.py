@@ -1,13 +1,14 @@
 """
-SQLite DB接続設定
+DB接続設定(SQLiteまたはPostgreSQLに対応)
 """
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
-# SQLiteファイルは backend 直下の data/ フォルダに作成される
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
@@ -19,7 +20,6 @@ Base = declarative_base()
 
 
 def get_db():
-    """FastAPIの依存性注入で使うDBセッション取得関数"""
     db = SessionLocal()
     try:
         yield db
@@ -28,6 +28,5 @@ def get_db():
 
 
 def init_db():
-    """テーブルを作成する(初回起動時に実行)"""
-    from app.db import models  # noqa: F401  (モデルを読み込ませるためにimport)
+    from app.db import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
