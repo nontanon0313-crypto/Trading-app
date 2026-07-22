@@ -82,43 +82,6 @@
     <div class="result-card" id="tradeImportResult" hidden></div>
 
     <h2 class="section-title">手動で入力する</h2>
-    <form class="card form-card" id="tradeForm">
-      <div class="field">
-        <label>通貨ペア</label>
-        <input type="text" name="currency_pair" placeholder="USDJPY" required>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>エントリー価格</label>
-          <input type="number" step="0.001" name="entry_price" required>
-        </div>
-        <div class="field">
-          <label>決済価格</label>
-          <input type="number" step="0.001" name="exit_price">
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>損益</label>
-          <input type="number" step="0.01" name="profit_loss">
-        </div>
-        <div class="field">
-          <label>ロット</label>
-          <input type="number" step="0.01" name="lot_size">
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>エントリー日時</label>
-          <input type="datetime-local" name="entry_datetime">
-        </div>
-        <div class="field">
-          <label>決済日時</label>
-          <input type="datetime-local" name="exit_datetime">
-        </div>
-      </div>
-      <button type="submit" class="btn btn-primary">記録を保存</button>
-    </form>
 
     <h2 class="section-title">記録一覧</h2>
     <div id="tradesList" class="list"></div>
