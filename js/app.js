@@ -265,6 +265,19 @@ document.getElementById("improvementBtn").addEventListener("click", async () => 
   }
 });
 
+document.getElementById("clearDataBtn").addEventListener("click", async () => {
+  if (!confirm("すべてのデータ(分析履歴・トレード記録)を削除します。元に戻せません。よろしいですか?")) return;
+  try {
+    await Api.clearAllData();
+    loadStatistics();
+    loadTrades();
+    loadAnalysisHistory();
+    alert("全データを削除しました");
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
 // ---------- ユーティリティ ----------
 function fmt(n) {
   return (n === null || n === undefined) ? "-" : n;
