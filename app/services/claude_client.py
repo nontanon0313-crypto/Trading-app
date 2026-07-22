@@ -128,10 +128,12 @@ TRADE_HISTORY_SYSTEM_PROMPT = """\
 
 画面に表示されている行はすべて含めてください。読み取れない項目はnullにしてください。
 """
-
 def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
     """約定履歴画像をGeminiに送り、行データのリストを取得する"""
     _ensure_configured()
+    from datetime import date
+    current_year = date.today().year
+
     model = genai.GenerativeModel(
         MODEL_NAME,
         system_instruction=TRADE_HISTORY_SYSTEM_PROMPT,
@@ -140,9 +142,9 @@ def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> lis
     response = model.generate_content(
         [
             {"mime_type": media_type, "data": image_bytes},
-            "この約定履歴の画像を読み取ってください。",
+            f"この約定履歴の画像を読み取ってください。今年は{current_year}年です。画面に年が表示されていない日付はすべて{current_year}年として扱ってください。",
         ],
-        generation_config={"max_output_tokens": 3000},
+        generation_config={"max_output_tokens": 6000},
     )
 
     raw_text = response.text.strip()
