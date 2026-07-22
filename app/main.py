@@ -32,6 +32,7 @@ app.include_router(trade_record.router)
 app.include_router(verification.router)
 app.include_router(statistics.router)
 app.include_router(improvement.router)
+app.include_router(admin.router)
 
 
 @app.on_event("startup")
