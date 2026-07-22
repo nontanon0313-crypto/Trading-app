@@ -13,6 +13,7 @@ from app.api import (
     verification,
     statistics,
     improvement,
+    admin,
 )
 
 app = FastAPI(title=settings.APP_NAME)
