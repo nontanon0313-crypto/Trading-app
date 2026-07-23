@@ -56,6 +56,25 @@ const Api = {
     return res.json();
   },
 
+  async getTrade(tradeId) {
+    const res = await fetch(`${API_BASE}/api/trades/${tradeId}`);
+    if (!res.ok) throw new Error("トレード情報の取得に失敗しました");
+    return res.json();
+  },
+
+  async updateTradeJournal(tradeId, payload) {
+    const res = await fetch(`${API_BASE}/api/trades/${tradeId}/journal`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "日記の保存に失敗しました");
+    }
+    return res.json();
+  },
+
   async listTrades() {
     const res = await fetch(`${API_BASE}/api/trades/?limit=50`);
     if (!res.ok) throw new Error("記録一覧の取得に失敗しました");
