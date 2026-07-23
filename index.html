@@ -41,7 +41,7 @@
     <p class="lede">TradingViewのチャート画像をアップロードすると、AIがエントリー・損切り・利確を判定します。</p>
 
     <div class="upload-card" id="uploadCard">
-      <input type="file" id="chartFileInput" accept="image/*" hidden>
+      <input type="file" id="chartFileInput" accept="image/*" capture="environment" hidden>
       <div class="upload-drop" id="uploadDrop">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7C8B99" stroke-width="1.6">
           <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -60,7 +60,7 @@
     <div id="analysisHistory" class="list"></div>
   </section>
 
-<!-- ② トレード記録 -->
+  <!-- ② トレード記録 -->
   <section class="view" id="view-trades" data-view="trades" hidden>
     <h1>トレード記録</h1>
     <p class="lede">GMOクリック証券の約定履歴画面を撮影・アップロードすると、AIが自動で読み取って記録します。</p>
@@ -81,12 +81,10 @@
 
     <div class="result-card" id="tradeImportResult" hidden></div>
 
-    <h2 class="section-title">手動で入力する</h2>
-
     <h2 class="section-title">記録一覧</h2>
     <div id="tradesList" class="list"></div>
   </section>
-  
+
   <!-- ③ 統計・改善提案 -->
   <section class="view" id="view-stats" data-view="stats" hidden>
     <h1>統計・改善提案</h1>
@@ -101,6 +99,7 @@
 
     <button class="btn btn-danger" id="clearDataBtn">全データを削除する</button>
   </section>
+
 </main>
 
 <nav class="tabbar">

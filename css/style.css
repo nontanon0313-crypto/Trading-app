@@ -138,6 +138,8 @@ h1 { font-size: 1.5rem; padding: 20px 20px 0; }
   font-size: 0.92rem;
   resize: vertical;
 }
+.field-row { display: flex; gap: 10px; }
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -159,7 +161,6 @@ h1 { font-size: 1.5rem; padding: 20px 20px 0; }
 .modal-close { background: var(--surface-2); border: none; color: var(--text); width: 32px; height: 32px; border-radius: 50%; font-size: 1rem; }
 .modal-section-title { color: var(--text-muted); font-size: 0.85rem; margin: 18px 0 6px; }
 .list-item { cursor: pointer; }
-.field-row { display: flex; gap: 10px; }
 
 .list { padding: 10px 20px 0; display: flex; flex-direction: column; gap: 10px; }
 .list-item {

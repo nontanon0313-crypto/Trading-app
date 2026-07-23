@@ -1,7 +1,3 @@
-window.addEventListener("error", (e) => {
-  alert("JSエラー: " + e.message + " (行:" + e.lineno + ")");
-});
-
 // ---------- タブ切替 ----------
 const tabs = document.querySelectorAll(".tab");
 const views = document.querySelectorAll(".view");
@@ -184,7 +180,6 @@ tradeAnalyzeBtn.addEventListener("click", async () => {
   }
 });
 
-
 async function loadTrades() {
   const container = document.getElementById("tradesList");
   try {
@@ -218,7 +213,6 @@ async function loadTrades() {
 // ---------- トレード日記モーダル ----------
 const journalModal = document.getElementById("journalModal");
 const journalForm = document.getElementById("journalForm");
-const journalModalCloseBtn = document.getElementById("journalModalClose");
 let currentJournalTradeId = null;
 
 async function openJournalModal(tradeId) {
@@ -234,38 +228,6 @@ async function openJournalModal(tradeId) {
   } catch (e) {
     alert(e.message);
   }
-}
-
-if (journalModalCloseBtn) {
-  journalModalCloseBtn.addEventListener("click", () => {
-    journalModal.hidden = true;
-  });
-}
-if (journalModal) {
-  journalModal.addEventListener("click", (e) => {
-    if (e.target === journalModal) journalModal.hidden = true;
-  });
-}
-if (journalForm) {
-  journalForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!currentJournalTradeId) return;
-    const formData = new FormData(journalForm);
-    const payload = {};
-    for (const [key, value] of formData.entries()) {
-      if (value === "") continue;
-      payload[key] = key === "journal_confidence" || key === "journal_planned_take_profit"
-        ? parseFloat(value)
-        : value;
-    }
-    try {
-      await Api.updateTradeJournal(currentJournalTradeId, payload);
-      journalModal.hidden = true;
-      loadTrades();
-    } catch (e) {
-      alert(e.message);
-    }
-  });
 }
 
 document.getElementById("journalModalClose").addEventListener("click", () => {
