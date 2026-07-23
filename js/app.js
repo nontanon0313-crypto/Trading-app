@@ -1,3 +1,7 @@
+window.addEventListener("error", (e) => {
+  alert("JSエラー: " + e.message + " (行:" + e.lineno + ")");
+});
+
 // ---------- タブ切替 ----------
 const tabs = document.querySelectorAll(".tab");
 const views = document.querySelectorAll(".view");
