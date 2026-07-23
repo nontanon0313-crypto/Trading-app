@@ -192,20 +192,71 @@ async function loadTrades() {
     container.innerHTML = trades.map(t => {
       const pl = t.profit_loss;
       const plClass = pl > 0 ? "pos" : pl < 0 ? "neg" : "";
+      const hasJournal = t.journal_entry_reason || t.journal_post_notes;
       return `
-        <div class="list-item">
+        <div class="list-item" data-trade-id="${t.id}">
           <div class="top-row">
-            <span class="pair">${t.currency_pair}</span>
+            <span class="pair">${t.currency_pair}${hasJournal ? " 📝" : ""}</span>
             <span class="pl ${plClass}">${pl != null ? (pl > 0 ? "+" : "") + pl : "-"}</span>
           </div>
           <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)} ・ ${formatDate(t.entry_datetime)}</div>
         </div>
       `;
     }).join("");
+    container.querySelectorAll(".list-item").forEach(el => {
+      el.addEventListener("click", () => openJournalModal(el.dataset.tradeId));
+    });
   } catch (e) {
     container.innerHTML = `<div class="empty-state">記録を取得できませんでした</div>`;
   }
 }
+
+// ---------- トレード日記モーダル ----------
+const journalModal = document.getElementById("journalModal");
+const journalForm = document.getElementById("journalForm");
+let currentJournalTradeId = null;
+
+async function openJournalModal(tradeId) {
+  currentJournalTradeId = tradeId;
+  try {
+    const trade = await Api.getTrade(tradeId);
+    journalForm.reset();
+    Object.keys(trade).forEach(key => {
+      const field = journalForm.elements[key];
+      if (field && trade[key] != null) field.value = trade[key];
+    });
+    journalModal.hidden = false;
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+document.getElementById("journalModalClose").addEventListener("click", () => {
+  journalModal.hidden = true;
+});
+journalModal.addEventListener("click", (e) => {
+  if (e.target === journalModal) journalModal.hidden = true;
+});
+
+journalForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentJournalTradeId) return;
+  const formData = new FormData(journalForm);
+  const payload = {};
+  for (const [key, value] of formData.entries()) {
+    if (value === "") continue;
+    payload[key] = key === "journal_confidence" || key === "journal_planned_take_profit"
+      ? parseFloat(value)
+      : value;
+  }
+  try {
+    await Api.updateTradeJournal(currentJournalTradeId, payload);
+    journalModal.hidden = true;
+    loadTrades();
+  } catch (e) {
+    alert(e.message);
+  }
+});
 
 // ---------- ③統計・改善提案 ----------
 async function loadStatistics() {
@@ -220,17 +271,34 @@ async function loadStatistics() {
       <div class="stat-box"><div class="num">${stats.max_drawdown ?? "-"}</div><div class="lbl">最大ドローダウン</div></div>
       <div class="stat-box"><div class="num">${stats.max_winning_streak}</div><div class="lbl">最大連勝</div></div>
       <div class="stat-box"><div class="num">${stats.max_losing_streak}</div><div class="lbl">最大連敗</div></div>
+      <div class="stat-box"><div class="num">${stats.average_holding_minutes ?? "-"}</div><div class="lbl">平均保有時間(分)</div></div>
+      <div class="stat-box"><div class="num">${fmtPct(stats.rule_adherence_rate)}</div><div class="lbl">ルール遵守率</div></div>
     `;
 
-    const pairs = Object.entries(stats.by_currency_pair || {});
-    breakdown.innerHTML = pairs.length
-      ? pairs.map(([pair, s]) => `
+    const renderGroup = (title, obj) => {
+      const entries = Object.entries(obj || {});
+      if (!entries.length) return "";
+      return `
+        <h3 class="modal-section-title">${title}</h3>
+        ${entries.map(([k, s]) => `
           <div class="list-item">
-            <div class="top-row"><span class="pair">${pair}</span><span>${fmtPct(s.win_rate)}</span></div>
+            <div class="top-row"><span class="pair">${k}</span><span>${fmtPct(s.win_rate)}</span></div>
             <div class="meta">${s.trade_count}件 ・ 損益合計 ${s.total_profit_loss}</div>
           </div>
-        `).join("")
-      : `<div class="empty-state">通貨ペア別データがありません</div>`;
+        `).join("")}
+      `;
+    };
+
+    breakdown.innerHTML = [
+      renderGroup("通貨ペア別", stats.by_currency_pair),
+      renderGroup("ロング/ショート別", stats.by_side),
+      renderGroup("時間帯別", stats.by_hour),
+      renderGroup("曜日別", stats.by_weekday),
+      renderGroup("エントリー理由別", stats.by_entry_reason),
+      renderGroup("利確/損切り理由別", stats.by_exit_reason),
+      renderGroup("感情別", stats.by_emotion),
+      renderGroup("確信度別", stats.by_confidence),
+    ].join("") || `<div class="empty-state">データがありません</div>`;
   } catch (e) {
     grid.innerHTML = `<div class="empty-state">統計を取得できませんでした</div>`;
   }
