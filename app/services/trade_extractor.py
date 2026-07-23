@@ -31,6 +31,7 @@ def pair_trade_rows(rows: list) -> list:
                 open_row = open_stacks[pair].pop(0)
                 trades.append({
                     "currency_pair": pair,
+                    "side": open_row.get("side"),
                     "entry_price": open_row.get("price"),
                     "exit_price": row.get("price"),
                     "profit_loss": row.get("profit_loss"),
@@ -41,6 +42,7 @@ def pair_trade_rows(rows: list) -> list:
             else:
                 trades.append({
                     "currency_pair": pair,
+                    "side": None,
                     "entry_price": None,
                     "exit_price": row.get("price"),
                     "profit_loss": row.get("profit_loss"),
@@ -53,6 +55,7 @@ def pair_trade_rows(rows: list) -> list:
         for open_row in remaining:
             trades.append({
                 "currency_pair": pair,
+                "side": open_row.get("side"),
                 "entry_price": open_row.get("price"),
                 "exit_price": None,
                 "profit_loss": None,
