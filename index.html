@@ -118,6 +118,55 @@
   </button>
 </nav>
 
+<!-- トレード日記モーダル -->
+<div class="modal-overlay" id="journalModal" hidden>
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2>トレード日記</h2>
+      <button class="modal-close" id="journalModalClose">✕</button>
+    </div>
+    <form id="journalForm" class="form-card">
+      <h3 class="modal-section-title">エントリー前</h3>
+      <div class="field"><label>エントリー理由</label><textarea name="journal_entry_reason" rows="2"></textarea></div>
+      <div class="field"><label>狙ったシナリオ</label><textarea name="journal_scenario" rows="2"></textarea></div>
+      <div class="field-row">
+        <div class="field"><label>利確目標</label><input type="number" step="0.001" name="journal_planned_take_profit"></div>
+        <div class="field"><label>確信度(1-5)</label><input type="number" min="1" max="5" name="journal_confidence"></div>
+      </div>
+      <div class="field"><label>損切り根拠</label><textarea name="journal_stop_loss_basis" rows="2"></textarea></div>
+      <div class="field"><label>不安要素</label><textarea name="journal_anxiety" rows="2"></textarea></div>
+      <div class="field"><label>見送る理由はあったか</label><input type="text" name="journal_skip_consideration"></div>
+      <div class="field">
+        <label>ルール通りのトレードか</label>
+        <select name="journal_followed_rule">
+          <option value="">選択してください</option>
+          <option value="はい">はい</option>
+          <option value="いいえ">いいえ</option>
+          <option value="一部">一部</option>
+        </select>
+      </div>
+      <div class="field"><label>感情(焦り・FOMO・冷静など)</label><input type="text" name="journal_emotion"></div>
+      <div class="field"><label>自由記述</label><textarea name="journal_pre_notes" rows="2"></textarea></div>
+
+      <h3 class="modal-section-title">決済後</h3>
+      <div class="field"><label>利確/損切り理由</label><textarea name="journal_exit_reason" rows="2"></textarea></div>
+      <div class="field">
+        <label>想定通りだったか</label>
+        <select name="journal_as_expected">
+          <option value="">選択してください</option>
+          <option value="はい">はい</option>
+          <option value="いいえ">いいえ</option>
+          <option value="一部">一部</option>
+        </select>
+      </div>
+      <div class="field"><label>改善点</label><textarea name="journal_improvement" rows="2"></textarea></div>
+      <div class="field"><label>自由記述</label><textarea name="journal_post_notes" rows="2"></textarea></div>
+
+      <button type="submit" class="btn btn-primary">日記を保存</button>
+    </form>
+  </div>
+</div>
+
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
 </body>
