@@ -87,6 +87,12 @@ const Api = {
     return res.json();
   },
 
+  async getCalendar() {
+    const res = await fetch(`${API_BASE}/api/statistics/calendar`);
+    if (!res.ok) throw new Error("カレンダーデータの取得に失敗しました");
+    return res.json();
+  },
+
   async getImprovement() {
     const res = await fetch(`${API_BASE}/api/improvement/`);
     if (!res.ok) {

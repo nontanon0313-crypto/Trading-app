@@ -6,7 +6,7 @@ function switchView(name) {
   views.forEach(v => v.hidden = v.dataset.view !== name);
   tabs.forEach(t => t.classList.toggle("active", t.dataset.view === name));
   if (name === "trades") loadTrades();
-  if (name === "stats") loadStatistics();
+  if (name === "stats") { loadStatistics(); loadCalendar(); }
 }
 
 tabs.forEach(tab => {
@@ -363,6 +363,83 @@ document.getElementById("improvementBtn").addEventListener("click", async () => 
     btn.disabled = false;
     btn.textContent = "AIに改善提案をもらう";
   }
+});
+
+// ---------- 日別カレンダーヒートマップ ----------
+let calendarData = {};
+let calViewDate = new Date();
+
+async function loadCalendar() {
+  try {
+    calendarData = await Api.getCalendar();
+  } catch (e) {
+    calendarData = {};
+  }
+  renderCalendarMonth();
+}
+
+function renderCalendarMonth() {
+  const grid = document.getElementById("calGrid");
+  const label = document.getElementById("calLabel");
+  const year = calViewDate.getFullYear();
+  const month = calViewDate.getMonth();
+  label.textContent = `${year}年${month + 1}月`;
+
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const monthValues = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    if (calendarData[key]) monthValues.push(calendarData[key].profit_loss);
+  }
+  const maxAbs = Math.max(1, ...monthValues.map(v => Math.abs(v)));
+
+  const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
+  let html = weekdayLabels.map(w => `<div class="cal-weekday">${w}</div>`).join("");
+  for (let i = 0; i < startWeekday; i++) html += `<div class="cal-cell empty"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const entry = calendarData[key];
+    if (!entry) {
+      html += `<div class="cal-cell no-trade">${d}</div>`;
+    } else {
+      const intensity = Math.min(1, Math.abs(entry.profit_loss) / maxAbs);
+      const alpha = 0.25 + intensity * 0.6;
+      const color = entry.profit_loss >= 0 ? `rgba(47,191,113,${alpha})` : `rgba(229,72,77,${alpha})`;
+      const cls = entry.profit_loss >= 0 ? "profit" : "loss";
+      html += `<div class="cal-cell ${cls}" style="background:${color}" data-date="${key}">${d}</div>`;
+    }
+  }
+
+  grid.innerHTML = html;
+  grid.querySelectorAll(".cal-cell[data-date]").forEach(cell => {
+    cell.addEventListener("click", () => showCalDayDetail(cell.dataset.date));
+  });
+}
+
+function showCalDayDetail(dateKey) {
+  const entry = calendarData[dateKey];
+  const detail = document.getElementById("calDayDetail");
+  if (!entry) { detail.hidden = true; return; }
+  const emotions = entry.emotions.length ? entry.emotions.join(", ") : "記録なし";
+  detail.hidden = false;
+  detail.innerHTML = `
+    <div class="reason-block"><span class="k">${dateKey}</span>
+    損益: ${entry.profit_loss > 0 ? "+" : ""}${entry.profit_loss} ・ ${entry.trade_count}件<br>
+    感情: ${escapeHtml(emotions)}</div>
+  `;
+}
+
+document.getElementById("calPrev").addEventListener("click", () => {
+  calViewDate.setMonth(calViewDate.getMonth() - 1);
+  renderCalendarMonth();
+});
+document.getElementById("calNext").addEventListener("click", () => {
+  calViewDate.setMonth(calViewDate.getMonth() + 1);
+  renderCalendarMonth();
 });
 
 document.getElementById("milestoneBtn").addEventListener("click", async () => {

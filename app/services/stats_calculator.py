@@ -186,3 +186,28 @@ def _group_stats(trades: List[Trade], key) -> dict:
             "total_profit_loss": round(sum(t.profit_loss for t in group_trades), 2),
         }
     return result
+
+
+def calculate_daily_calendar(trades: List[Trade]) -> dict:
+    """日付ごとの損益・トレード数・感情をカレンダーヒートマップ用に集計する"""
+    closed = [t for t in trades if t.profit_loss is not None]
+    daily = defaultdict(lambda: {"profit_loss": 0.0, "trade_count": 0, "emotions": []})
+
+    for t in closed:
+        d = t.exit_datetime or t.entry_datetime or t.created_at
+        if not d:
+            continue
+        key = d.strftime("%Y-%m-%d")
+        daily[key]["profit_loss"] += t.profit_loss
+        daily[key]["trade_count"] += 1
+        if t.journal_emotion:
+            daily[key]["emotions"].append(t.journal_emotion)
+
+    result = {}
+    for date_key, v in daily.items():
+        result[date_key] = {
+            "profit_loss": round(v["profit_loss"], 2),
+            "trade_count": v["trade_count"],
+            "emotions": v["emotions"],
+        }
+    return result
