@@ -193,17 +193,18 @@ async function loadTrades() {
       const plClass = pl > 0 ? "pos" : pl < 0 ? "neg" : "";
       const hasJournal = t.journal_entry_reason || t.journal_post_notes;
       return `
-        <div class="list-item" data-trade-id="${t.id}">
+        <div class="list-item">
           <div class="top-row">
             <span class="pair">${t.currency_pair}${hasJournal ? " 📝" : ""}</span>
             <span class="pl ${plClass}">${pl != null ? (pl > 0 ? "+" : "") + pl : "-"}</span>
           </div>
           <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)} ・ ${formatDate(t.entry_datetime)}</div>
+          <button class="btn btn-secondary journal-btn" data-trade-id="${t.id}">${hasJournal ? "日記を編集" : "日記を書く"}</button>
         </div>
       `;
     }).join("");
-    container.querySelectorAll(".list-item").forEach(el => {
-      el.addEventListener("click", () => openJournalModal(el.dataset.tradeId));
+    container.querySelectorAll(".journal-btn").forEach(btn => {
+      btn.addEventListener("click", () => openJournalModal(btn.dataset.tradeId));
     });
   } catch (e) {
     container.innerHTML = `<div class="empty-state">記録を取得できませんでした</div>`;
