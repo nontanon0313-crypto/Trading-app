@@ -1,7 +1,9 @@
 """
 トレード記録API(GMOクリック証券の約定履歴を保存・参照する)
-手動入力に加え、約定履歴画像をアップロードしてAIに自動読み取りさせる機能も提供する。
+約定履歴画像からの自動登録に加え、各トレードにエントリー前/決済後の
+日記(ジャーナル)を追記できるようにする。
 """
+import asyncio
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
@@ -29,6 +31,23 @@ class TradeCreate(BaseModel):
     exit_datetime: Optional[datetime] = None
 
 
+class TradeJournalUpdate(BaseModel):
+    journal_entry_reason: Optional[str] = None
+    journal_scenario: Optional[str] = None
+    journal_planned_take_profit: Optional[float] = None
+    journal_stop_loss_basis: Optional[str] = None
+    journal_confidence: Optional[int] = None
+    journal_anxiety: Optional[str] = None
+    journal_skip_consideration: Optional[str] = None
+    journal_followed_rule: Optional[str] = None
+    journal_emotion: Optional[str] = None
+    journal_pre_notes: Optional[str] = None
+    journal_exit_reason: Optional[str] = None
+    journal_as_expected: Optional[str] = None
+    journal_improvement: Optional[str] = None
+    journal_post_notes: Optional[str] = None
+
+
 @router.post("/")
 def create_trade(trade_in: TradeCreate, db: Session = Depends(get_db)):
     trade = Trade(**trade_in.model_dump())
@@ -47,7 +66,7 @@ async def create_trades_from_image(
     image_bytes, media_type = await validate_and_read_image(file)
 
     try:
-        rows = claude_client.extract_trade_rows(image_bytes, media_type)
+        rows = await asyncio.to_thread(claude_client.extract_trade_rows, image_bytes, media_type)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"画像読み取りでエラーが発生しました: {e}")
 
@@ -64,6 +83,7 @@ async def create_trades_from_image(
             continue
         trade = Trade(
             currency_pair=t.get("currency_pair"),
+            side=t.get("side"),
             entry_price=t.get("entry_price"),
             exit_price=t.get("exit_price"),
             profit_loss=t.get("profit_loss"),
@@ -86,6 +106,20 @@ def get_trade(trade_id: int, db: Session = Depends(get_db)):
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+    return trade
+
+
+@router.patch("/{trade_id}/journal")
+def update_trade_journal(trade_id: int, journal_in: TradeJournalUpdate, db: Session = Depends(get_db)):
+    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+
+    for field, value in journal_in.model_dump(exclude_unset=True).items():
+        setattr(trade, field, value)
+
+    db.commit()
+    db.refresh(trade)
     return trade
 
 
