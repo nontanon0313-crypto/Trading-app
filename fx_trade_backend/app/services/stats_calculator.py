@@ -1,5 +1,5 @@
 """
-トレード統計(勝率・PF・最大DD・各種内訳など)を計算するモジュール
+トレード統計(勝率・PF・最大DDなど)を計算するモジュール
 """
 from collections import defaultdict
 from typing import List
@@ -38,29 +38,6 @@ def calculate_statistics(trades: List[Trade]) -> dict:
         closed_trades,
         key=lambda t: t.entry_datetime.strftime("%A") if t.entry_datetime else "unknown",
     )
-    by_side = _group_stats(
-        closed_trades,
-        key=lambda t: _side_label(t.side),
-    )
-    by_entry_reason = _group_stats(
-        closed_trades,
-        key=lambda t: t.journal_entry_reason or "未入力",
-    )
-    by_exit_reason = _group_stats(
-        closed_trades,
-        key=lambda t: t.journal_exit_reason or "未入力",
-    )
-    by_emotion = _group_stats(
-        closed_trades,
-        key=lambda t: t.journal_emotion or "未入力",
-    )
-    by_confidence = _group_stats(
-        closed_trades,
-        key=lambda t: t.journal_confidence if t.journal_confidence is not None else "未入力",
-    )
-
-    avg_holding_minutes = _average_holding_time(closed_trades)
-    rule_adherence_rate = _rule_adherence_rate(closed_trades)
 
     return {
         "total_trades": len(closed_trades),
@@ -72,25 +49,10 @@ def calculate_statistics(trades: List[Trade]) -> dict:
         "max_drawdown": round(max_drawdown, 2),
         "max_winning_streak": max_winning_streak,
         "max_losing_streak": max_losing_streak,
-        "average_holding_minutes": avg_holding_minutes,
-        "rule_adherence_rate": rule_adherence_rate,
         "by_currency_pair": by_currency,
         "by_hour": by_hour,
         "by_weekday": by_weekday,
-        "by_side": by_side,
-        "by_entry_reason": by_entry_reason,
-        "by_exit_reason": by_exit_reason,
-        "by_emotion": by_emotion,
-        "by_confidence": by_confidence,
     }
-
-
-def _side_label(side):
-    if side == "buy":
-        return "ロング"
-    if side == "sell":
-        return "ショート"
-    return "不明"
 
 
 def _empty_stats() -> dict:
@@ -104,16 +66,9 @@ def _empty_stats() -> dict:
         "max_drawdown": None,
         "max_winning_streak": 0,
         "max_losing_streak": 0,
-        "average_holding_minutes": None,
-        "rule_adherence_rate": None,
         "by_currency_pair": {},
         "by_hour": {},
         "by_weekday": {},
-        "by_side": {},
-        "by_entry_reason": {},
-        "by_exit_reason": {},
-        "by_emotion": {},
-        "by_confidence": {},
     }
 
 
@@ -146,30 +101,6 @@ def _calculate_max_streak(trades: List[Trade], winning: bool) -> int:
         else:
             current_streak = 0
     return max_streak
-
-
-def _average_holding_time(trades: List[Trade]):
-    """保有時間(分)の平均。エントリー/決済日時が揃っているものだけで計算する"""
-    durations = []
-    for t in trades:
-        if t.holding_time_minutes is not None:
-            durations.append(t.holding_time_minutes)
-        elif t.entry_datetime and t.exit_datetime:
-            delta = (t.exit_datetime - t.entry_datetime).total_seconds() / 60
-            if delta >= 0:
-                durations.append(delta)
-    if not durations:
-        return None
-    return round(sum(durations) / len(durations), 1)
-
-
-def _rule_adherence_rate(trades: List[Trade]):
-    """journal_followed_ruleが記録されているトレードのうち、「はい」の割合"""
-    judged = [t for t in trades if t.journal_followed_rule]
-    if not judged:
-        return None
-    followed = [t for t in judged if t.journal_followed_rule == "はい"]
-    return round(len(followed) / len(judged) * 100, 2)
 
 
 def _group_stats(trades: List[Trade], key) -> dict:

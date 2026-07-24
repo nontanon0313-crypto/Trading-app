@@ -225,6 +225,7 @@ async function openJournalModal(tradeId) {
       const field = journalForm.elements[key];
       if (field && trade[key] != null) field.value = trade[key];
     });
+    document.getElementById("tradeReviewResult").hidden = true;
     journalModal.hidden = false;
   } catch (e) {
     alert(e.message);
@@ -255,6 +256,37 @@ journalForm.addEventListener("submit", async (e) => {
     loadTrades();
   } catch (e) {
     alert(e.message);
+  }
+});
+
+document.getElementById("tradeReviewBtn").addEventListener("click", async () => {
+  if (!currentJournalTradeId) return;
+  const btn = document.getElementById("tradeReviewBtn");
+  const result = document.getElementById("tradeReviewResult");
+  btn.disabled = true;
+  btn.textContent = "分析中...";
+  try {
+    const data = await Api.reviewTrade(currentJournalTradeId);
+    const r = data.review || {};
+    const section = (title, obj) => {
+      if (!obj || typeof obj !== "object") return "";
+      const lines = Object.values(obj).filter(Boolean).join(" / ");
+      return lines ? `<div class="reason-block"><span class="k">${title}</span>${escapeHtml(lines)}</div>` : "";
+    };
+    result.hidden = false;
+    result.innerHTML = [
+      section("エントリー分析", r.entry_analysis),
+      section("リスク分析", r.risk_analysis),
+      section("決済分析", r.exit_analysis),
+      section("心理分析", r.psychology_analysis),
+      r.summary ? `<div class="reason-block"><span class="k">総合コメント</span>${escapeHtml(r.summary)}</div>` : "",
+    ].join("");
+  } catch (e) {
+    result.hidden = false;
+    result.innerHTML = `<div class="reason-block">${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "AIに5カテゴリでレビューしてもらう";
   }
 });
 
@@ -330,6 +362,36 @@ document.getElementById("improvementBtn").addEventListener("click", async () => 
   } finally {
     btn.disabled = false;
     btn.textContent = "AIに改善提案をもらう";
+  }
+});
+
+document.getElementById("milestoneBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("milestoneBtn");
+  const result = document.getElementById("milestoneResult");
+  btn.disabled = true;
+  btn.textContent = "分析中...";
+  try {
+    const data = await Api.getMilestoneAnalysis();
+    const a = data.analysis || {};
+    const line = (title, key) => a[key] ? `<div class="reason-block"><span class="k">${title}</span>${escapeHtml(a[key])}</div>` : "";
+    result.hidden = false;
+    result.innerHTML = [
+      line("勝っている条件", "winning_conditions"),
+      line("負けている条件", "losing_conditions"),
+      line("共通する勝ちパターン", "common_winning_patterns"),
+      line("共通する負けパターン", "common_losing_patterns"),
+      line("削除すべきルール", "rules_to_remove"),
+      line("追加すべきルール", "rules_to_add"),
+      line("勝率より期待値が高い条件", "high_expectancy_low_winrate"),
+      line("勝率は高いが期待値が低い条件", "high_winrate_low_expectancy"),
+      line("最も改善効果が高い課題", "top_improvement_priority"),
+    ].join("");
+  } catch (e) {
+    result.hidden = false;
+    result.innerHTML = `<div class="reason-block">${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "節目分析を実行(20件以上で利用可)";
   }
 });
 

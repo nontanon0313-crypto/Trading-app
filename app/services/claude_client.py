@@ -17,7 +17,8 @@ def _ensure_configured():
         _configured = True
 
 
-MODEL_NAME = "gemini-flash-latest"
+# 無料枠のあるモデル(画像入力に対応)
+MODEL_NAME = "gemini-2.0-flash"
 
 CHART_ANALYSIS_SYSTEM_PROMPT = """\
 あなたはFXチャート分析の専門家です。送られたTradingViewのチャート画像を分析し、
@@ -56,6 +57,69 @@ IMPROVEMENT_SYSTEM_PROMPT = """\
   "avoid_conditions": ["..."]
 }
 """
+
+TRADE_HISTORY_SYSTEM_PROMPT = """\
+あなたは証券会社の約定履歴画面を読み取る専門家です。GMOクリック証券などの取引アプリの
+「約定履歴」画面のスクリーンショットが渡されます。表の各行を読み取り、
+必ず以下のJSON配列形式のみで回答してください。前置きや説明文は不要です。
+
+[
+  {
+    "row_type": "open または close (新規注文の行はopen、決済注文の行はclose)",
+    "currency_pair": "銘柄名(例: USDJPY, 銀スポットなど画面に表示されている名称そのまま)",
+    "side": "buy または sell (買/売)",
+    "price": 約定価格(数値),
+    "quantity": 約定数量(数値),
+    "datetime": "約定日時。ISO8601形式(YYYY-MM-DDTHH:MM:SS)に変換。年が画面になければ今年と仮定",
+    "profit_loss": "受渡金額・損益(数値)。決済行のみ、読み取れなければnull"
+  }
+]
+
+画面に表示されている行はすべて含めてください。読み取れない項目はnullにしてください。
+"""
+
+
+def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
+    """約定履歴画像をGeminiに送り、行データのリストを取得する"""
+    _ensure_configured()
+    from datetime import date
+    current_year = date.today().year
+
+    model = genai.GenerativeModel(
+        MODEL_NAME,
+        system_instruction=TRADE_HISTORY_SYSTEM_PROMPT,
+    )
+
+    response = model.generate_content(
+        [
+            {"mime_type": media_type, "data": image_bytes},
+            f"この約定履歴の画像を読み取ってください。今年は{current_year}年です。画面に年が表示されていない日付はすべて{current_year}年として扱ってください。",
+        ],
+        generation_config={"max_output_tokens": 6000},
+    )
+
+    raw_text = response.text.strip()
+    json_str = _extract_json_array(raw_text)
+    try:
+        result = json.loads(json_str)
+        return result if isinstance(result, list) else []
+    except json.JSONDecodeError:
+        # 解析に失敗した場合、AIの生レスポンスを添えてエラーとして通知する(原因調査用)
+        raise RuntimeError(f"AI応答の解析に失敗しました。応答内容: {raw_text[:400]}")
+
+
+def _extract_json_array(text: str) -> str:
+    """コードブロックや前置き文が混ざっていても、JSON配列部分だけを取り出す"""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return text[start:end + 1]
+    return text
 
 
 def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png") -> dict:
@@ -107,64 +171,105 @@ def _safe_json_parse(raw_text: str) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
+        # パース失敗時は生データを添えてエラーを示す
         return {"error": "JSON解析に失敗しました", "raw": raw_text}
 
-TRADE_HISTORY_SYSTEM_PROMPT = """\
-あなたは証券会社の約定履歴画面を読み取る専門家です。GMOクリック証券などの取引アプリの
-「約定履歴」画面のスクリーンショットが渡されます。表の各行を読み取り、
-必ず以下のJSON配列形式のみで回答してください。前置きや説明文は不要です。
 
-[
-  {
-    "row_type": "open または close (新規注文の行はopen、決済注文の行はclose)",
-    "currency_pair": "銘柄名(例: USDJPY, 銀スポットなど画面に表示されている名称そのまま)",
-    "side": "buy または sell (買/売)",
-    "price": 約定価格(数値),
-    "quantity": 約定数量(数値),
-    "datetime": "約定日時。ISO8601形式(YYYY-MM-DDTHH:MM:SS)に変換。年が画面になければ今年と仮定",
-    "profit_loss": "受渡金額・損益(数値)。決済行のみ、読み取れなければnull"
-  }
-]
+TRADE_REVIEW_SYSTEM_PROMPT = """\
+あなたはFXトレードの検証コーチです。1つのトレードのデータ(価格・損益・
+エントリー前後の日記)が渡されます。以下の5つの観点で分析し、
+必ず以下のJSON形式のみで回答してください。データが無い項目は「情報不足のため判断不可」としてください。
 
-画面に表示されている行はすべて含めてください。読み取れない項目はnullにしてください。
+{
+  "entry_analysis": {
+    "reason_sufficient": "根拠は十分だったか",
+    "reason_conflict": "根拠同士に矛盾はないか",
+    "entry_position": "エントリー位置は適切か",
+    "timing": "遅すぎる・早すぎるエントリーではないか"
+  },
+  "risk_analysis": {
+    "stop_loss_position": "損切り位置は適切か",
+    "risk_reward": "リスクリワードは十分か",
+    "excess_risk": "不必要にリスクを取っていないか"
+  },
+  "exit_analysis": {
+    "take_profit_position": "利確位置の評価",
+    "stop_loss_result": "損切り位置の評価(結果を踏まえて)",
+    "breakeven_exit": "建値撤退の妥当性(該当する場合)"
+  },
+  "psychology_analysis": {
+    "emotion_impact": "感情が判断へ影響した可能性",
+    "rule_violation": "ルール違反の有無",
+    "fear_greed_impact": "焦り・欲・恐怖の影響"
+  },
+  "summary": "総合コメント(2-3文)"
+}
 """
-def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
-    """約定履歴画像をGeminiに送り、行データのリストを取得する"""
-    _ensure_configured()
-    from datetime import date
-    current_year = date.today().year
 
+
+def analyze_trade_review(trade_data: dict) -> dict:
+    """1トレード分のデータをもとに、5カテゴリの振り返り分析を行う"""
+    _ensure_configured()
     model = genai.GenerativeModel(
         MODEL_NAME,
-        system_instruction=TRADE_HISTORY_SYSTEM_PROMPT,
+        system_instruction=TRADE_REVIEW_SYSTEM_PROMPT,
     )
 
     response = model.generate_content(
-        [
-            {"mime_type": media_type, "data": image_bytes},
-            f"この約定履歴の画像を読み取ってください。今年は{current_year}年です。画面に年が表示されていない日付はすべて{current_year}年として扱ってください。",
-        ],
-        generation_config={"max_output_tokens": 6000},
+        "以下のトレードデータを分析してください。\n\n"
+        + json.dumps(trade_data, ensure_ascii=False, default=str),
+        generation_config={"max_output_tokens": 2000},
     )
 
-    raw_text = response.text.strip()
-    json_str = _extract_json_array(raw_text)
-    try:
-        result = json.loads(json_str)
-        return result if isinstance(result, list) else []
-    except json.JSONDecodeError:
-        raise RuntimeError(f"AI応答の解析に失敗しました。応答内容: {raw_text[:400]}")
+    return _safe_json_parse(_extract_json_object(response.text.strip()))
 
 
-def _extract_json_array(text: str) -> str:
-    """コードブロックや前置き文が混ざっていても、JSON配列部分だけを取り出す"""
-    text = text.strip()
+MILESTONE_SYSTEM_PROMPT = """\
+あなたはFXトレードの統計アナリストです。蓄積されたトレードデータ(統計値と
+個々のトレード一覧)が渡されます。**必ずデータに基づいて**(推測ではなく)
+以下の観点を分析し、JSON形式のみで回答してください。十分なデータが無い項目は
+「データ不足のため判断不可」としてください。
+
+{
+  "winning_conditions": "勝っている条件(データの傾向から)",
+  "losing_conditions": "負けている条件(データの傾向から)",
+  "common_winning_patterns": "共通する勝ちパターン",
+  "common_losing_patterns": "共通する負けパターン",
+  "rules_to_remove": "削除すべきルール(根拠付き)",
+  "rules_to_add": "追加すべきルール(根拠付き)",
+  "high_expectancy_low_winrate": "勝率より期待値が高い条件",
+  "high_winrate_low_expectancy": "勝率は高いが期待値が低い条件",
+  "top_improvement_priority": "最も改善効果が高い課題"
+}
+"""
+
+
+def analyze_milestone(stats: dict, trades_summary: list) -> dict:
+    """節目件数(20/50/100件など)ごとの、蓄積データに基づく統計的分析を行う"""
+    _ensure_configured()
+    model = genai.GenerativeModel(
+        MODEL_NAME,
+        system_instruction=MILESTONE_SYSTEM_PROMPT,
+    )
+
+    payload = {"statistics": stats, "trades": trades_summary}
+    response = model.generate_content(
+        "以下の統計データと個々のトレード一覧を分析してください。\n\n"
+        + json.dumps(payload, ensure_ascii=False, default=str),
+        generation_config={"max_output_tokens": 3000},
+    )
+
+    return _safe_json_parse(_extract_json_object(response.text.strip()))
+
+
+def _extract_json_object(text: str) -> str:
+    """コードブロックや前置き文が混ざっていても、JSONオブジェクト部分だけを取り出す"""
     if text.startswith("```"):
         text = text.strip("`")
         if text.lower().startswith("json"):
             text = text[4:]
-    start = text.find("[")
-    end = text.rfind("]")
+    start = text.find("{")
+    end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         return text[start:end + 1]
     return text

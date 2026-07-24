@@ -7,6 +7,8 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+# NeonなどのPostgresは "postgres://" 形式で発行されることがあるが、
+# SQLAlchemyは "postgresql://" を要求するため変換する
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -20,11 +22,13 @@ Base = declarative_base()
 
 
 def get_db():
+    """FastAPIの依存性注入で使うDBセッション取得関数"""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
 
 def init_db():
     """テーブルを作成する(初回起動時に実行)。既存テーブルには不足カラムを追加する"""
@@ -59,6 +63,8 @@ def _migrate_add_missing_columns():
         "journal_as_expected": "VARCHAR",
         "journal_improvement": "TEXT",
         "journal_post_notes": "TEXT",
+        "ai_review": "TEXT",
+        "ai_review_created_at": "TIMESTAMP",
     }
 
     with engine.connect() as conn:
@@ -69,4 +75,3 @@ def _migrate_add_missing_columns():
                     conn.commit()
                 except Exception:
                     conn.rollback()
-

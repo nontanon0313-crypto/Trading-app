@@ -101,4 +101,22 @@ const Api = {
     if (!res.ok) throw new Error("データの削除に失敗しました");
     return res.json();
   },
+
+  async reviewTrade(tradeId) {
+    const res = await fetch(`${API_BASE}/api/trades/${tradeId}/review`, { method: "POST" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "AIレビューに失敗しました");
+    }
+    return res.json();
+  },
+
+  async getMilestoneAnalysis() {
+    const res = await fetch(`${API_BASE}/api/improvement/milestone`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "節目分析の取得に失敗しました");
+    }
+    return res.json();
+  },
 };

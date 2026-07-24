@@ -40,6 +40,7 @@ def pair_trade_rows(rows: list) -> list:
                     "exit_datetime": row.get("datetime"),
                 })
             else:
+                # 対応する新規行が見つからない決済行(画面外にあった等)
                 trades.append({
                     "currency_pair": pair,
                     "side": None,
@@ -51,6 +52,7 @@ def pair_trade_rows(rows: list) -> list:
                     "exit_datetime": row.get("datetime"),
                 })
 
+    # 決済されずに残っている新規行(保有中のポジション)
     for pair, remaining in open_stacks.items():
         for open_row in remaining:
             trades.append({

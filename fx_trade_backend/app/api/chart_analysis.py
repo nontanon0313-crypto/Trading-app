@@ -1,7 +1,6 @@
 """
 チャート画像分析API
 """
-import asyncio
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -22,8 +21,7 @@ async def analyze_chart(
     image_bytes, media_type = await validate_and_read_image(file)
 
     try:
-        # 同期処理のAI呼び出しがイベントループをブロックしないよう別スレッドで実行
-        result = await asyncio.to_thread(claude_client.analyze_chart_image, image_bytes, media_type)
+        result = claude_client.analyze_chart_image(image_bytes, media_type)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI分析でエラーが発生しました: {e}")
 

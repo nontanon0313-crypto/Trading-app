@@ -51,7 +51,6 @@ class Trade(Base):
     analysis = relationship("ChartAnalysis", back_populates="trade")
 
     currency_pair = Column(String, nullable=False)
-    side = Column(String, nullable=True)                      # buy(ロング) / sell(ショート)
     entry_price = Column(Float, nullable=False)
     exit_price = Column(Float, nullable=True)
     profit_loss = Column(Float, nullable=True)               # 損益
@@ -59,28 +58,6 @@ class Trade(Base):
     holding_time_minutes = Column(Integer, nullable=True)
     entry_datetime = Column(DateTime, nullable=True)
     exit_datetime = Column(DateTime, nullable=True)
-
-    # ---- エントリー前の記録 ----
-    journal_entry_reason = Column(Text, nullable=True)        # エントリー理由
-    journal_scenario = Column(Text, nullable=True)             # 狙ったシナリオ
-    journal_planned_take_profit = Column(Float, nullable=True) # 利確目標
-    journal_stop_loss_basis = Column(Text, nullable=True)      # 損切り根拠
-    journal_confidence = Column(Integer, nullable=True)        # 確信度(1-5)
-    journal_anxiety = Column(Text, nullable=True)               # 不安要素
-    journal_skip_consideration = Column(Text, nullable=True)   # 見送る理由はあったか
-    journal_followed_rule = Column(String, nullable=True)      # ルール通りか(はい/いいえ/一部)
-    journal_emotion = Column(String, nullable=True)            # 感情(焦り/FOMO/冷静 等)
-    journal_pre_notes = Column(Text, nullable=True)            # 自由記述(エントリー前)
-
-    # ---- 決済後の記録 ----
-    journal_exit_reason = Column(Text, nullable=True)          # 利確/損切り理由
-    journal_as_expected = Column(String, nullable=True)        # 想定通りだったか
-    journal_improvement = Column(Text, nullable=True)          # 改善点
-    journal_post_notes = Column(Text, nullable=True)           # 自由記述(決済後)
-
-    # ---- AIによる毎回のレビュー結果 ----
-    ai_review = Column(Text, nullable=True)                    # JSON文字列(5カテゴリ分析)
-    ai_review_created_at = Column(DateTime, nullable=True)
 
     verification = relationship("Verification", back_populates="trade", uselist=False)
 

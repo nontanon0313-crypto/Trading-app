@@ -32,6 +32,7 @@ class TradeCreate(BaseModel):
 
 
 class TradeJournalUpdate(BaseModel):
+    """トレード日記(エントリー前・決済後)の更新用。すべて任意項目。"""
     journal_entry_reason: Optional[str] = None
     journal_scenario: Optional[str] = None
     journal_planned_take_profit: Optional[float] = None
@@ -111,6 +112,7 @@ def get_trade(trade_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{trade_id}/journal")
 def update_trade_journal(trade_id: int, journal_in: TradeJournalUpdate, db: Session = Depends(get_db)):
+    """トレード日記(エントリー前・決済後の記録)を更新する"""
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
@@ -126,3 +128,49 @@ def update_trade_journal(trade_id: int, journal_in: TradeJournalUpdate, db: Sess
 @router.get("/")
 def list_trades(db: Session = Depends(get_db), limit: int = 100):
     return db.query(Trade).order_by(Trade.created_at.desc()).limit(limit).all()
+
+
+@router.post("/{trade_id}/review")
+async def review_trade(trade_id: int, db: Session = Depends(get_db)):
+    """このトレードについて、エントリー/リスク/決済/心理の4カテゴリでAIレビューを実行する"""
+    import json as _json
+    from datetime import datetime as _datetime
+
+    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+
+    trade_data = {
+        "currency_pair": trade.currency_pair,
+        "side": trade.side,
+        "entry_price": trade.entry_price,
+        "exit_price": trade.exit_price,
+        "profit_loss": trade.profit_loss,
+        "lot_size": trade.lot_size,
+        "holding_time_minutes": trade.holding_time_minutes,
+        "journal_entry_reason": trade.journal_entry_reason,
+        "journal_scenario": trade.journal_scenario,
+        "journal_planned_take_profit": trade.journal_planned_take_profit,
+        "journal_stop_loss_basis": trade.journal_stop_loss_basis,
+        "journal_confidence": trade.journal_confidence,
+        "journal_anxiety": trade.journal_anxiety,
+        "journal_followed_rule": trade.journal_followed_rule,
+        "journal_emotion": trade.journal_emotion,
+        "journal_pre_notes": trade.journal_pre_notes,
+        "journal_exit_reason": trade.journal_exit_reason,
+        "journal_as_expected": trade.journal_as_expected,
+        "journal_improvement": trade.journal_improvement,
+        "journal_post_notes": trade.journal_post_notes,
+    }
+
+    try:
+        review = await asyncio.to_thread(claude_client.analyze_trade_review, trade_data)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AIレビューでエラーが発生しました: {e}")
+
+    trade.ai_review = _json.dumps(review, ensure_ascii=False)
+    trade.ai_review_created_at = _datetime.utcnow()
+    db.commit()
+    db.refresh(trade)
+
+    return {"trade_id": trade.id, "review": review}
