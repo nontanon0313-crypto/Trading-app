@@ -82,6 +82,10 @@ class Trade(Base):
     ai_review = Column(Text, nullable=True)                    # JSON文字列(5カテゴリ分析)
     ai_review_created_at = Column(DateTime, nullable=True)
 
+    # ---- 事前記録・ルールタグ ----
+    journal_pre_committed_at = Column(DateTime, nullable=True)  # エントリー理由等を最初に保存した日時
+    journal_rule_tags = Column(Text, nullable=True)             # JSON配列文字列(複合条件タグ)
+
     verification = relationship("Verification", back_populates="trade", uselist=False)
 
 

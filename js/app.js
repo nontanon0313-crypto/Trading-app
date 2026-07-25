@@ -229,6 +229,21 @@ async function openJournalModal(tradeId) {
     });
     document.getElementById("tradeReviewResult").hidden = true;
 
+    const tagsInput = document.getElementById("ruleTagsInput");
+    tagsInput.value = Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags.join(", ") : "";
+    Api.getRuleTags().then(tags => {
+      document.getElementById("ruleTagsList").innerHTML = tags.map(t => `<option value="${t}">`).join("");
+    }).catch(() => {});
+
+    const precommitEl = document.getElementById("precommitStatus");
+    if (!trade.journal_pre_committed_at) {
+      precommitEl.innerHTML = `<span class="hint">まだエントリー前の記録なし</span>`;
+    } else if (trade.is_precommitted) {
+      precommitEl.innerHTML = `<span class="hint">✅ 事前記録あり(${formatDate(trade.journal_pre_committed_at)}、決済前に記録)</span>`;
+    } else {
+      precommitEl.innerHTML = `<span class="hint">⚠️ 決済後の記録(${formatDate(trade.journal_pre_committed_at)})- 後付けの可能性あり</span>`;
+    }
+
     const select = document.getElementById("analysisSelect");
     try {
       const analyses = await Api.listAnalyses();
@@ -289,6 +304,8 @@ journalForm.addEventListener("submit", async (e) => {
       ? parseFloat(value)
       : value;
   }
+  const tagsRaw = document.getElementById("ruleTagsInput").value;
+  payload.journal_rule_tags = tagsRaw.split(",").map(s => s.trim()).filter(Boolean);
   try {
     await Api.updateTradeJournal(currentJournalTradeId, payload);
     journalModal.hidden = true;
@@ -343,6 +360,8 @@ async function loadStatistics() {
       <div class="stat-box"><div class="num">${stats.max_drawdown ?? "-"}</div><div class="lbl">最大ドローダウン</div></div>
       <div class="stat-box"><div class="num">${stats.max_winning_streak}</div><div class="lbl">最大連勝</div></div>
       <div class="stat-box"><div class="num">${stats.max_losing_streak}</div><div class="lbl">最大連敗</div></div>
+      <div class="stat-box"><div class="num">${stats.expectancy ?? "-"}</div><div class="lbl">期待値(1トレード平均)</div></div>
+      <div class="stat-box"><div class="num">${fmtPct(stats.precommit_rate)}</div><div class="lbl">事前記録率</div></div>
       <div class="stat-box"><div class="num">${stats.average_holding_minutes ?? "-"}</div><div class="lbl">平均保有時間(分)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.rule_adherence_rate)}</div><div class="lbl">ルール遵守率</div></div>
     `;
@@ -355,7 +374,7 @@ async function loadStatistics() {
         ${entries.map(([k, s]) => `
           <div class="list-item">
             <div class="top-row"><span class="pair">${k}</span><span>${fmtPct(s.win_rate)}</span></div>
-            <div class="meta">${s.trade_count}件 ・ 損益合計 ${s.total_profit_loss}</div>
+            <div class="meta">${s.trade_count}件 ・ 損益合計 ${s.total_profit_loss} ・ 期待値 ${s.expectancy}</div>
           </div>
         `).join("")}
       `;
@@ -364,6 +383,7 @@ async function loadStatistics() {
     breakdown.innerHTML = [
       renderGroup("通貨ペア別", stats.by_currency_pair),
       renderGroup("ロング/ショート別", stats.by_side),
+      renderGroup("ルールタグ別", stats.by_rule_tag),
       renderGroup("時間帯別", stats.by_hour),
       renderGroup("曜日別", stats.by_weekday),
       renderGroup("エントリー理由別", stats.by_entry_reason),
@@ -502,6 +522,7 @@ document.getElementById("milestoneBtn").addEventListener("click", async () => {
       line("勝率より期待値が高い条件", "high_expectancy_low_winrate"),
       line("勝率は高いが期待値が低い条件", "high_winrate_low_expectancy"),
       line("最も改善効果が高い課題", "top_improvement_priority"),
+      line("信頼性についてのコメント", "reliability_note"),
     ].join("");
   } catch (e) {
     result.hidden = false;

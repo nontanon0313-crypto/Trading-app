@@ -4,6 +4,7 @@ AI改善提案API
 蓄積データに基づいた統計的分析(節目分析)も提供する。
 """
 import asyncio
+import json as _json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -58,20 +59,29 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
             detail=f"節目分析には最低{MILESTONES[0]}件の決済済みトレードが必要です(現在{stats['total_trades']}件)",
         )
 
-    trades_summary = [
-        {
+    trades_summary = []
+    for t in trades:
+        try:
+            tags = _json.loads(t.journal_rule_tags) if t.journal_rule_tags else []
+        except (ValueError, TypeError):
+            tags = []
+        is_precommitted = bool(
+            t.journal_pre_committed_at and t.exit_datetime
+            and t.journal_pre_committed_at < t.exit_datetime
+        )
+        trades_summary.append({
             "currency_pair": t.currency_pair,
             "side": t.side,
             "profit_loss": t.profit_loss,
             "entry_datetime": t.entry_datetime,
+            "rule_tags": tags,
+            "is_precommitted": is_precommitted,
             "journal_entry_reason": t.journal_entry_reason,
             "journal_exit_reason": t.journal_exit_reason,
             "journal_emotion": t.journal_emotion,
             "journal_confidence": t.journal_confidence,
             "journal_followed_rule": t.journal_followed_rule,
-        }
-        for t in trades
-    ]
+        })
 
     try:
         analysis = await asyncio.to_thread(claude_client.analyze_milestone, stats, trades_summary)

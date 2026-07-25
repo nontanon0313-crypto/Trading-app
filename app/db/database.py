@@ -65,6 +65,8 @@ def _migrate_add_missing_columns():
         "journal_post_notes": "TEXT",
         "ai_review": "TEXT",
         "ai_review_created_at": "TIMESTAMP",
+        "journal_pre_committed_at": "TIMESTAMP",
+        "journal_rule_tags": "TEXT",
     }
 
     with engine.connect() as conn:

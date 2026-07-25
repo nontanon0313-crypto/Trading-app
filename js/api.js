@@ -56,6 +56,12 @@ const Api = {
     return res.json();
   },
 
+  async getRuleTags() {
+    const res = await fetch(`${API_BASE}/api/trades/rule-tags`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
   async getTrade(tradeId) {
     const res = await fetch(`${API_BASE}/api/trades/${tradeId}`);
     if (!res.ok) throw new Error("トレード情報の取得に失敗しました");

@@ -1,22 +1,31 @@
 """
 トレード記録API(GMOクリック証券の約定履歴を保存・参照する)
 約定履歴画像からの自動登録に加え、各トレードにエントリー前/決済後の
-日記(ジャーナル)を追記できるようにする。
+日記(ジャーナル)・事前記録タイムスタンプ・複合ルールタグを追記できるようにする。
 """
 import asyncio
+import json as _json
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import Trade
+from app.db.models import Trade, ChartAnalysis
 from app.services.image_processor import validate_and_read_image
 from app.services import claude_client
 from app.services.trade_extractor import pair_trade_rows, _parse_dt
 
 router = APIRouter(prefix="/api/trades", tags=["trades"])
+
+# エントリー前の記録とみなすフィールド(これらが初めて保存された時刻を事前記録日時とする)
+PRE_TRADE_FIELDS = {
+    "journal_entry_reason", "journal_scenario", "journal_planned_take_profit",
+    "journal_stop_loss_basis", "journal_confidence", "journal_anxiety",
+    "journal_skip_consideration", "journal_followed_rule", "journal_emotion",
+    "journal_pre_notes", "journal_rule_tags",
+}
 
 
 class TradeCreate(BaseModel):
@@ -47,6 +56,7 @@ class TradeJournalUpdate(BaseModel):
     journal_as_expected: Optional[str] = None
     journal_improvement: Optional[str] = None
     journal_post_notes: Optional[str] = None
+    journal_rule_tags: Optional[List[str]] = None
 
 
 @router.post("/")
@@ -105,8 +115,6 @@ async def create_trades_from_image(
 @router.patch("/{trade_id}/link-analysis")
 def link_analysis(trade_id: int, body: dict, db: Session = Depends(get_db)):
     """このトレードに、既存のチャート分析結果を紐付ける"""
-    from app.db.models import ChartAnalysis
-
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
@@ -125,16 +133,26 @@ def link_analysis(trade_id: int, body: dict, db: Session = Depends(get_db)):
 @router.get("/{trade_id}/linked-analysis")
 def get_linked_analysis(trade_id: int, db: Session = Depends(get_db)):
     """このトレードに紐付いているチャート分析結果を返す(無ければnull)"""
-    from app.db.models import ChartAnalysis
-
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
     if not trade.analysis_id:
         return None
 
-    analysis = db.query(ChartAnalysis).filter(ChartAnalysis.id == trade.analysis_id).first()
-    return analysis
+    return db.query(ChartAnalysis).filter(ChartAnalysis.id == trade.analysis_id).first()
+
+
+@router.get("/rule-tags")
+def list_rule_tags(db: Session = Depends(get_db)):
+    """過去に使われたルールタグの一覧(入力候補用)を返す"""
+    trades = db.query(Trade).filter(Trade.journal_rule_tags.isnot(None)).all()
+    tags = set()
+    for t in trades:
+        try:
+            tags.update(_json.loads(t.journal_rule_tags))
+        except (ValueError, TypeError):
+            continue
+    return sorted(tags)
 
 
 @router.get("/{trade_id}")
@@ -142,39 +160,51 @@ def get_trade(trade_id: int, db: Session = Depends(get_db)):
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
-    return trade
+    return _serialize_trade(trade)
 
 
 @router.patch("/{trade_id}/journal")
 def update_trade_journal(trade_id: int, journal_in: TradeJournalUpdate, db: Session = Depends(get_db)):
-    """トレード日記(エントリー前・決済後の記録)を更新する"""
+    """トレード日記(エントリー前・決済後の記録)を更新する。
+    エントリー前項目が初めて保存された時、その時刻を事前記録日時として記録する(編集は自由)。
+    """
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
 
-    for field, value in journal_in.model_dump(exclude_unset=True).items():
-        setattr(trade, field, value)
+    updates = journal_in.model_dump(exclude_unset=True)
+
+    if trade.journal_pre_committed_at is None and any(k in PRE_TRADE_FIELDS for k in updates):
+        trade.journal_pre_committed_at = datetime.utcnow()
+
+    for field, value in updates.items():
+        if field == "journal_rule_tags":
+            trade.journal_rule_tags = _json.dumps(value, ensure_ascii=False) if value else None
+        else:
+            setattr(trade, field, value)
 
     db.commit()
     db.refresh(trade)
-    return trade
+    return _serialize_trade(trade)
 
 
 @router.get("/")
 def list_trades(db: Session = Depends(get_db), limit: int = 100):
-    return db.query(Trade).order_by(Trade.created_at.desc()).limit(limit).all()
+    trades = db.query(Trade).order_by(Trade.created_at.desc()).limit(limit).all()
+    return [_serialize_trade(t) for t in trades]
 
 
 @router.post("/{trade_id}/review")
 async def review_trade(trade_id: int, db: Session = Depends(get_db)):
     """このトレードについて、AIレビューを実行する(紐付いたチャート分析があれば併せて考慮する)"""
-    import json as _json
-    from datetime import datetime as _datetime
-    from app.db.models import ChartAnalysis
-
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+
+    is_precommitted = bool(
+        trade.journal_pre_committed_at and trade.exit_datetime
+        and trade.journal_pre_committed_at < trade.exit_datetime
+    )
 
     trade_data = {
         "currency_pair": trade.currency_pair,
@@ -197,6 +227,8 @@ async def review_trade(trade_id: int, db: Session = Depends(get_db)):
         "journal_as_expected": trade.journal_as_expected,
         "journal_improvement": trade.journal_improvement,
         "journal_post_notes": trade.journal_post_notes,
+        "journal_rule_tags": _json.loads(trade.journal_rule_tags) if trade.journal_rule_tags else [],
+        "is_precommitted": is_precommitted,
     }
 
     if trade.analysis_id:
@@ -220,8 +252,23 @@ async def review_trade(trade_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=502, detail=f"AIレビューでエラーが発生しました: {e}")
 
     trade.ai_review = _json.dumps(review, ensure_ascii=False)
-    trade.ai_review_created_at = _datetime.utcnow()
+    trade.ai_review_created_at = datetime.utcnow()
     db.commit()
     db.refresh(trade)
 
-    return {"trade_id": trade.id, "review": review}
+    return {"trade_id": trade.id, "review": review, "is_precommitted": is_precommitted}
+
+
+def _serialize_trade(trade: Trade) -> dict:
+    """journal_rule_tagsをJSON配列としてデコードして返す"""
+    is_precommitted = bool(
+        trade.journal_pre_committed_at and trade.exit_datetime
+        and trade.journal_pre_committed_at < trade.exit_datetime
+    )
+    data = {c.name: getattr(trade, c.name) for c in trade.__table__.columns}
+    try:
+        data["journal_rule_tags"] = _json.loads(trade.journal_rule_tags) if trade.journal_rule_tags else []
+    except (ValueError, TypeError):
+        data["journal_rule_tags"] = []
+    data["is_precommitted"] = is_precommitted
+    return data

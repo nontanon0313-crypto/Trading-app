@@ -146,6 +146,12 @@
       <button type="button" class="btn btn-secondary" id="quoteAnalysisBtn">分析結果をエントリー理由/シナリオに引用</button>
 
       <h3 class="modal-section-title">エントリー前</h3>
+      <div class="field" id="precommitStatus"></div>
+      <div class="field">
+        <label>取引ルール(複数可・カンマ区切り)</label>
+        <input type="text" id="ruleTagsInput" list="ruleTagsList" placeholder="例: トレンドラインブレイク, 下落3波">
+        <datalist id="ruleTagsList"></datalist>
+      </div>
       <div class="field"><label>エントリー理由</label><textarea name="journal_entry_reason" rows="2"></textarea></div>
       <div class="field"><label>狙ったシナリオ</label><textarea name="journal_scenario" rows="2"></textarea></div>
       <div class="field-row">
