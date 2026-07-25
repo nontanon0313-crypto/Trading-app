@@ -1,9 +1,14 @@
 """
 Gemini API とのやり取りを担当するクライアント。
-チャート画像分析・改善提案生成の両方で使い回す。
+チャート画像分析・改善提案生成・トレードレビュー・節目分析で使い回す。
 (元はClaude APIを使用していたが、無料枠のあるGemini APIに変更)
+
+無料枠のクォータ(利用上限)は使い過ぎると一時的に止まることがあるため、
+メインモデルが上限に達した場合は、別枠のクォータを持つ軽量モデルに
+自動で切り替えるフォールバック機構を持たせている。
 """
 import json
+import time
 import google.generativeai as genai
 from app.core.config import settings
 
@@ -17,8 +22,37 @@ def _ensure_configured():
         _configured = True
 
 
-# 無料枠のあるモデル(画像入力に対応)
-MODEL_NAME = "gemini-2.0-flash"
+# メインモデルと、クォータ超過時のフォールバック先
+# Flash-Lite系は無料枠の1日上限が大きい(500回)ため、こちらを主力にする
+MODEL_NAME = "gemini-3.5-flash-lite"
+FALLBACK_MODEL_NAME = "gemini-3.1-flash-lite"
+
+
+def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
+    """Geminiにリクエストを送る。クォータ超過(429)時は自動でフォールバックモデルに切り替える"""
+    _ensure_configured()
+    last_error = None
+
+    for model_name in (MODEL_NAME, FALLBACK_MODEL_NAME):
+        try:
+            model = genai.GenerativeModel(model_name, system_instruction=system_instruction)
+            response = model.generate_content(
+                contents,
+                generation_config={"max_output_tokens": max_output_tokens},
+            )
+            return response.text
+        except Exception as e:
+            last_error = e
+            error_text = str(e)
+            is_quota_error = "429" in error_text or "quota" in error_text.lower() or "RESOURCE_EXHAUSTED" in error_text
+            if is_quota_error and model_name == MODEL_NAME:
+                # メインモデルの無料枠上限。別枠のフォールバックモデルで再試行する
+                time.sleep(1)
+                continue
+            raise
+
+    raise last_error
+
 
 CHART_ANALYSIS_SYSTEM_PROMPT = """\
 あなたはFXチャート分析の専門家です。送られたTradingViewのチャート画像を分析し、
@@ -78,103 +112,6 @@ TRADE_HISTORY_SYSTEM_PROMPT = """\
 画面に表示されている行はすべて含めてください。読み取れない項目はnullにしてください。
 """
 
-
-def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
-    """約定履歴画像をGeminiに送り、行データのリストを取得する"""
-    _ensure_configured()
-    from datetime import date
-    current_year = date.today().year
-
-    model = genai.GenerativeModel(
-        MODEL_NAME,
-        system_instruction=TRADE_HISTORY_SYSTEM_PROMPT,
-    )
-
-    response = model.generate_content(
-        [
-            {"mime_type": media_type, "data": image_bytes},
-            f"この約定履歴の画像を読み取ってください。今年は{current_year}年です。画面に年が表示されていない日付はすべて{current_year}年として扱ってください。",
-        ],
-        generation_config={"max_output_tokens": 6000},
-    )
-
-    raw_text = response.text.strip()
-    json_str = _extract_json_array(raw_text)
-    try:
-        result = json.loads(json_str)
-        return result if isinstance(result, list) else []
-    except json.JSONDecodeError:
-        # 解析に失敗した場合、AIの生レスポンスを添えてエラーとして通知する(原因調査用)
-        raise RuntimeError(f"AI応答の解析に失敗しました。応答内容: {raw_text[:400]}")
-
-
-def _extract_json_array(text: str) -> str:
-    """コードブロックや前置き文が混ざっていても、JSON配列部分だけを取り出す"""
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.lower().startswith("json"):
-            text = text[4:]
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        return text[start:end + 1]
-    return text
-
-
-def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png") -> dict:
-    """チャート画像をGeminiに送り、構造化された分析結果を取得する"""
-    _ensure_configured()
-    model = genai.GenerativeModel(
-        MODEL_NAME,
-        system_instruction=CHART_ANALYSIS_SYSTEM_PROMPT,
-    )
-
-    response = model.generate_content(
-        [
-            {"mime_type": media_type, "data": image_bytes},
-            "このチャート画像を分析してください。",
-        ],
-        generation_config={"max_output_tokens": 2000},
-    )
-
-    raw_text = response.text
-    parsed = _safe_json_parse(raw_text)
-    parsed["_raw_response"] = raw_text
-    return parsed
-
-
-def generate_improvement_suggestions(stats_summary: dict) -> dict:
-    """統計データをもとに改善提案をGeminiに生成させる"""
-    _ensure_configured()
-    model = genai.GenerativeModel(
-        MODEL_NAME,
-        system_instruction=IMPROVEMENT_SYSTEM_PROMPT,
-    )
-
-    response = model.generate_content(
-        "以下は過去のトレード統計データです。JSON形式で改善提案をしてください。\n\n"
-        + json.dumps(stats_summary, ensure_ascii=False, default=str),
-        generation_config={"max_output_tokens": 2000},
-    )
-
-    return _safe_json_parse(response.text)
-
-
-def _safe_json_parse(raw_text: str) -> dict:
-    """Geminiのレスポンスからjsonを安全に取り出す(コードブロック等が混ざっても対応)"""
-    text = raw_text.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.lower().startswith("json"):
-            text = text[4:]
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # パース失敗時は生データを添えてエラーを示す
-        return {"error": "JSON解析に失敗しました", "raw": raw_text}
-
-
 TRADE_REVIEW_SYSTEM_PROMPT = """\
 あなたはFXトレードの検証コーチです。1つのトレードのデータ(価格・損益・
 エントリー前後の日記、ルールタグ、事前記録か後付けかの情報、紐付けられている場合は
@@ -219,24 +156,6 @@ TRADE_REVIEW_SYSTEM_PROMPT = """\
 }
 """
 
-
-def analyze_trade_review(trade_data: dict) -> dict:
-    """1トレード分のデータをもとに、5カテゴリの振り返り分析を行う"""
-    _ensure_configured()
-    model = genai.GenerativeModel(
-        MODEL_NAME,
-        system_instruction=TRADE_REVIEW_SYSTEM_PROMPT,
-    )
-
-    response = model.generate_content(
-        "以下のトレードデータを分析してください。\n\n"
-        + json.dumps(trade_data, ensure_ascii=False, default=str),
-        generation_config={"max_output_tokens": 2000},
-    )
-
-    return _safe_json_parse(_extract_json_object(response.text.strip()))
-
-
 MILESTONE_SYSTEM_PROMPT = """\
 あなたはFXトレードの統計アナリストです。蓄積されたトレードデータ(統計値と
 個々のトレード一覧、各トレードのルールタグ・件数・期待値・事前記録か後付けかの情報)が
@@ -267,26 +186,104 @@ MILESTONE_SYSTEM_PROMPT = """\
 """
 
 
+def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
+    """約定履歴画像をGeminiに送り、行データのリストを取得する"""
+    from datetime import date
+    current_year = date.today().year
+
+    raw_text = _generate(
+        TRADE_HISTORY_SYSTEM_PROMPT,
+        [
+            {"mime_type": media_type, "data": image_bytes},
+            f"この約定履歴の画像を読み取ってください。今年は{current_year}年です。画面に年が表示されていない日付はすべて{current_year}年として扱ってください。",
+        ],
+        max_output_tokens=6000,
+    ).strip()
+
+    json_str = _extract_json_array(raw_text)
+    try:
+        result = json.loads(json_str)
+        return result if isinstance(result, list) else []
+    except json.JSONDecodeError:
+        raise RuntimeError(f"AI応答の解析に失敗しました。応答内容: {raw_text[:400]}")
+
+
+def _extract_json_array(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return text[start:end + 1]
+    return text
+
+
+def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png") -> dict:
+    """チャート画像をGeminiに送り、構造化された分析結果を取得する"""
+    raw_text = _generate(
+        CHART_ANALYSIS_SYSTEM_PROMPT,
+        [
+            {"mime_type": media_type, "data": image_bytes},
+            "このチャート画像を分析してください。",
+        ],
+        max_output_tokens=2000,
+    )
+    parsed = _safe_json_parse(raw_text)
+    parsed["_raw_response"] = raw_text
+    return parsed
+
+
+def generate_improvement_suggestions(stats_summary: dict) -> dict:
+    """統計データをもとに改善提案をGeminiに生成させる"""
+    raw_text = _generate(
+        IMPROVEMENT_SYSTEM_PROMPT,
+        "以下は過去のトレード統計データです。JSON形式で改善提案をしてください。\n\n"
+        + json.dumps(stats_summary, ensure_ascii=False, default=str),
+        max_output_tokens=2000,
+    )
+    return _safe_json_parse(raw_text)
+
+
+def analyze_trade_review(trade_data: dict) -> dict:
+    """1トレード分のデータをもとに、5カテゴリの振り返り分析を行う"""
+    raw_text = _generate(
+        TRADE_REVIEW_SYSTEM_PROMPT,
+        "以下のトレードデータを分析してください。\n\n"
+        + json.dumps(trade_data, ensure_ascii=False, default=str),
+        max_output_tokens=2000,
+    )
+    return _safe_json_parse(_extract_json_object(raw_text.strip()))
+
+
 def analyze_milestone(stats: dict, trades_summary: list) -> dict:
     """節目件数(20/50/100件など)ごとの、蓄積データに基づく統計的分析を行う"""
-    _ensure_configured()
-    model = genai.GenerativeModel(
-        MODEL_NAME,
-        system_instruction=MILESTONE_SYSTEM_PROMPT,
-    )
-
     payload = {"statistics": stats, "trades": trades_summary}
-    response = model.generate_content(
+    raw_text = _generate(
+        MILESTONE_SYSTEM_PROMPT,
         "以下の統計データと個々のトレード一覧を分析してください。\n\n"
         + json.dumps(payload, ensure_ascii=False, default=str),
-        generation_config={"max_output_tokens": 3000},
+        max_output_tokens=3000,
     )
+    return _safe_json_parse(_extract_json_object(raw_text.strip()))
 
-    return _safe_json_parse(_extract_json_object(response.text.strip()))
+
+def _safe_json_parse(raw_text: str) -> dict:
+    """Geminiのレスポンスからjsonを安全に取り出す(コードブロック等が混ざっても対応)"""
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {"error": "JSON解析に失敗しました", "raw": raw_text}
 
 
 def _extract_json_object(text: str) -> str:
-    """コードブロックや前置き文が混ざっていても、JSONオブジェクト部分だけを取り出す"""
     if text.startswith("```"):
         text = text.strip("`")
         if text.lower().startswith("json"):
