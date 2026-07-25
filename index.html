@@ -63,7 +63,27 @@
   <!-- ② トレード記録 -->
   <section class="view" id="view-trades" data-view="trades" hidden>
     <h1>トレード記録</h1>
-    <p class="lede">GMOクリック証券の約定履歴画面を撮影・アップロードすると、AIが自動で読み取って記録します。</p>
+    <p class="lede">ポジションを持ったら、決済前にここで記録してください。日記を先に書くことで、後付けバイアスのない分析ができます。</p>
+
+    <form class="card form-card" id="quickEntryForm">
+      <div class="field-row">
+        <div class="field"><label>通貨ペア</label><input type="text" name="currency_pair" placeholder="USDJPY" required></div>
+        <div class="field">
+          <label>方向</label>
+          <select name="side" required>
+            <option value="buy">ロング</option>
+            <option value="sell">ショート</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>エントリー価格</label><input type="number" step="0.001" name="entry_price" required></div>
+        <div class="field"><label>ロット</label><input type="number" step="0.01" name="lot_size"></div>
+      </div>
+      <button type="submit" class="btn btn-primary">エントリーを記録して日記を書く</button>
+    </form>
+
+    <p class="lede">GMOクリック証券の約定履歴画面を撮影・アップロードすると、AIが自動で読み取って記録します(上で事前記録したものは自動で紐付けられます)。</p>
 
     <div class="upload-card">
       <input type="file" id="tradeImageInput" accept="image/*" hidden>

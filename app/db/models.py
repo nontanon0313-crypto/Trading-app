@@ -37,6 +37,11 @@ class ChartAnalysis(Base):
 
     raw_ai_response = Column(Text, nullable=True)           # AIの生レスポンス(監査用)
 
+    # ---- ルールタグ別の網羅的評価(統計的検証用) ----
+    tag_evaluations = Column(Text, nullable=True)           # JSON配列: 各タグの判定・確信度・根拠等
+    tag_agreements = Column(Text, nullable=True)            # タグ同士の一致点
+    tag_conflicts = Column(Text, nullable=True)             # タグ同士の矛盾点
+
     trade = relationship("Trade", back_populates="analysis", uselist=False)
 
 

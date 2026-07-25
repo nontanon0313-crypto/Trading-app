@@ -31,6 +31,7 @@ PRE_TRADE_FIELDS = {
 class TradeCreate(BaseModel):
     analysis_id: Optional[int] = None
     currency_pair: str
+    side: Optional[str] = None
     entry_price: float
     exit_price: Optional[float] = None
     profit_loss: Optional[float] = None
@@ -87,11 +88,23 @@ async def create_trades_from_image(
     paired = pair_trade_rows(rows)
 
     created = []
+    matched = []
     skipped = 0
     for t in paired:
         if t.get("entry_price") is None:
             skipped += 1
             continue
+
+        existing = _find_matching_open_trade(db, t)
+        if existing:
+            existing.exit_price = t.get("exit_price")
+            existing.profit_loss = t.get("profit_loss")
+            existing.exit_datetime = _parse_dt(t.get("exit_datetime"))
+            if not existing.lot_size and t.get("lot_size"):
+                existing.lot_size = t.get("lot_size")
+            matched.append(existing)
+            continue
+
         trade = Trade(
             currency_pair=t.get("currency_pair"),
             side=t.get("side"),
@@ -106,10 +119,39 @@ async def create_trades_from_image(
         created.append(trade)
 
     db.commit()
-    for t in created:
+    for t in created + matched:
         db.refresh(t)
 
-    return {"created_count": len(created), "skipped_count": skipped, "trades": created}
+    return {
+        "created_count": len(created),
+        "matched_count": len(matched),
+        "skipped_count": skipped,
+        "trades": created + matched,
+    }
+
+
+def _find_matching_open_trade(db: Session, row: dict):
+    """事前記録された未決済トレード(exit_price未設定)の中から、
+    同じ通貨ペア・同じ方向でもっとも古く記録されたものを対応させる(FIFO)。
+    約定履歴は画像の下(古い順)から読み込まれ、事前記録も古い順に対応する運用を想定。"""
+    currency_pair = row.get("currency_pair")
+    side = row.get("side")
+    if not currency_pair:
+        return None
+
+    candidates = db.query(Trade).filter(
+        Trade.currency_pair == currency_pair,
+        Trade.exit_price.is_(None),
+    ).all()
+
+    if side:
+        candidates = [c for c in candidates if not c.side or c.side == side]
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda c: c.entry_datetime or c.created_at)
+    return candidates[0]
 
 
 @router.patch("/{trade_id}/link-analysis")

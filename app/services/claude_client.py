@@ -54,11 +54,32 @@ def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
     raise last_error
 
 
-CHART_ANALYSIS_SYSTEM_PROMPT = """\
-あなたはFXチャート分析の専門家です。送られたTradingViewのチャート画像を分析し、
+CHART_ANALYSIS_SYSTEM_PROMPT_HEADER = """\
+あなたはFXチャート分析の専門家です。送られたTradingViewのチャート画像を分析してください。
+
+分析方針:
+このチャート分析の目的は、特定の理論が正しいことを証明することではなく、
+どのような条件の組み合わせが長期的に期待値の高いトレードになるかを、後から
+実際のトレード結果と照合して統計的に検証するためのデータを集めることです。
+そのため、以下のルールタグそれぞれについて、判定可能な範囲で必ず評価してください。
+「条件が弱いから省略する」「自信が無いので判定しない」という対応はせず、
+判断が難しい場合は根拠欄に「推定」であることを明示した上で確信度を下げて出力してください。
+
+評価対象のルールタグ一覧:
+{tag_list}
+
+各タグについて、以下を出力してください。
+- judgment: "yes" | "no" (このチャートにその条件が該当するか)
+- confidence: 0-100の整数(確信度)
+- reason: 判定根拠
+- higher_tf_alignment: 上位時間足との整合性についてのコメント(画像から読み取れなければ「画像から判断不可」)
+- direction_impact: "buy" | "sell" | "neutral" (この条件がトレード判断に与える方向性)
+
+また、タグ同士で判定が一致している点(agreement_points)と、矛盾している点(conflict_points)も出力してください。
+
 必ず以下のJSON形式のみで回答してください。前置きや説明文は不要です。
 
-{
+{{
   "currency_pair": "通貨ペア(判別できなければnull)",
   "direction": "long" | "short" | "skip",
   "entry_price": 数値 または null,
@@ -70,11 +91,16 @@ CHART_ANALYSIS_SYSTEM_PROMPT = """\
   "dow_theory": "ダウ理論に基づく判断",
   "candle_pattern": "ローソク足パターンの分析",
   "moving_average": "移動平均線の状況",
-  "rsi_macd": "RSI・MACD等インジケータの分析",
+  "rsi_macd": "RSI・MACD等インジケータの分析(表示されていなければ「非表示」)",
   "volatility": "ボラティリティの評価",
   "entry_reason": "エントリー根拠(見送りの場合はnull)",
-  "skip_reason": "見送るべき理由(見送りでない場合はnull)"
-}
+  "skip_reason": "見送るべき理由(見送りでない場合はnull)",
+  "tag_evaluations": [
+    {{"tag": "タグ名", "judgment": "yes", "confidence": 70, "reason": "...", "higher_tf_alignment": "...", "direction_impact": "buy"}}
+  ],
+  "agreement_points": "タグ同士の一致点",
+  "conflict_points": "タグ同士の矛盾点"
+}}
 """
 
 IMPROVEMENT_SYSTEM_PROMPT = """\
@@ -221,17 +247,21 @@ def _extract_json_array(text: str) -> str:
     return text
 
 
-def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png") -> dict:
-    """チャート画像をGeminiに送り、構造化された分析結果を取得する"""
+def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png", rule_tags: list = None) -> dict:
+    """チャート画像をGeminiに送り、構造化された分析結果(ルールタグ網羅評価を含む)を取得する"""
+    rule_tags = rule_tags or []
+    tag_list_text = "\n".join(f"- {t}" for t in rule_tags) if rule_tags else "(タグ未登録)"
+    system_prompt = CHART_ANALYSIS_SYSTEM_PROMPT_HEADER.format(tag_list=tag_list_text)
+
     raw_text = _generate(
-        CHART_ANALYSIS_SYSTEM_PROMPT,
+        system_prompt,
         [
             {"mime_type": media_type, "data": image_bytes},
             "このチャート画像を分析してください。",
         ],
-        max_output_tokens=2000,
+        max_output_tokens=4096,
     )
-    parsed = _safe_json_parse(raw_text)
+    parsed = _safe_json_parse(_extract_json_object(raw_text.strip()))
     parsed["_raw_response"] = raw_text
     return parsed
 

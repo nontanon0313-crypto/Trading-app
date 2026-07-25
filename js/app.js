@@ -89,6 +89,23 @@ function renderAnalysis(result) {
     if (value) html += `<div class="reason-block"><span class="k">${label}</span>${escapeHtml(value)}</div>`;
   });
 
+  if (result.agreement_points) {
+    html += `<div class="reason-block"><span class="k">タグ間の一致点</span>${escapeHtml(result.agreement_points)}</div>`;
+  }
+  if (result.conflict_points) {
+    html += `<div class="reason-block"><span class="k">タグ間の矛盾点</span>${escapeHtml(result.conflict_points)}</div>`;
+  }
+
+  const evals = result.tag_evaluations;
+  if (Array.isArray(evals) && evals.length) {
+    const yesTags = evals.filter(e => e.judgment === "yes").sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    html += `<div class="reason-block"><span class="k">該当タグ(確信度順)</span>`;
+    html += yesTags.length
+      ? yesTags.map(e => `${escapeHtml(e.tag)}(${e.confidence ?? "-"}%・${e.direction_impact || "-"})`).join(" / ")
+      : "該当タグなし";
+    html += `</div>`;
+  }
+
   analysisResult.innerHTML = html;
   analysisResult.hidden = false;
 }
@@ -135,6 +152,29 @@ async function loadAnalysisHistory() {
     container.innerHTML = `<div class="empty-state">履歴を取得できませんでした</div>`;
   }
 }
+
+// ---------- ②エントリー即時記録 ----------
+document.getElementById("quickEntryForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const payload = {
+    currency_pair: formData.get("currency_pair"),
+    side: formData.get("side"),
+    entry_price: parseFloat(formData.get("entry_price")),
+    entry_datetime: new Date().toISOString(),
+  };
+  const lot = formData.get("lot_size");
+  if (lot) payload.lot_size = parseFloat(lot);
+
+  try {
+    const trade = await Api.createTrade(payload);
+    e.target.reset();
+    loadTrades();
+    openJournalModal(trade.id);
+  } catch (err) {
+    alert(err.message);
+  }
+});
 
 // ---------- ②トレード記録(画像から自動読み取り) ----------
 const tradeImageInput = document.getElementById("tradeImageInput");
@@ -192,10 +232,11 @@ async function loadTrades() {
       const pl = t.profit_loss;
       const plClass = pl > 0 ? "pos" : pl < 0 ? "neg" : "";
       const hasJournal = t.journal_entry_reason || t.journal_post_notes;
+      const isOpen = t.exit_price == null;
       return `
         <div class="list-item">
           <div class="top-row">
-            <span class="pair">${t.currency_pair}${hasJournal ? " 📝" : ""}</span>
+            <span class="pair">${t.currency_pair}${hasJournal ? " 📝" : ""}${isOpen ? ' <span class="direction-badge skip">保有中</span>' : ""}</span>
             <span class="pl ${plClass}">${pl != null ? (pl > 0 ? "+" : "") + pl : "-"}</span>
           </div>
           <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)} ・ ${formatDate(t.entry_datetime)}</div>

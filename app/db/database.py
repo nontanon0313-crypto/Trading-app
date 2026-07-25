@@ -56,42 +56,50 @@ def _seed_default_rule_tags():
 
 
 def _migrate_add_missing_columns():
-    """既存のtradesテーブルに、新しく追加したカラムが無ければ追加する(Postgres/SQLite両対応)"""
+    """既存テーブルに、新しく追加したカラムが無ければ追加する(Postgres/SQLite両対応)"""
     from sqlalchemy import text, inspect
 
     inspector = inspect(engine)
-    if "trades" not in inspector.get_table_names():
-        return
+    table_names = set(inspector.get_table_names())
 
-    existing_columns = {col["name"] for col in inspector.get_columns("trades")}
-
-    new_columns = {
-        "side": "VARCHAR",
-        "journal_entry_reason": "TEXT",
-        "journal_scenario": "TEXT",
-        "journal_planned_take_profit": "FLOAT",
-        "journal_stop_loss_basis": "TEXT",
-        "journal_confidence": "INTEGER",
-        "journal_anxiety": "TEXT",
-        "journal_skip_consideration": "TEXT",
-        "journal_followed_rule": "VARCHAR",
-        "journal_emotion": "VARCHAR",
-        "journal_pre_notes": "TEXT",
-        "journal_exit_reason": "TEXT",
-        "journal_as_expected": "VARCHAR",
-        "journal_improvement": "TEXT",
-        "journal_post_notes": "TEXT",
-        "ai_review": "TEXT",
-        "ai_review_created_at": "TIMESTAMP",
-        "journal_pre_committed_at": "TIMESTAMP",
-        "journal_rule_tags": "TEXT",
+    tables_to_migrate = {
+        "trades": {
+            "side": "VARCHAR",
+            "journal_entry_reason": "TEXT",
+            "journal_scenario": "TEXT",
+            "journal_planned_take_profit": "FLOAT",
+            "journal_stop_loss_basis": "TEXT",
+            "journal_confidence": "INTEGER",
+            "journal_anxiety": "TEXT",
+            "journal_skip_consideration": "TEXT",
+            "journal_followed_rule": "VARCHAR",
+            "journal_emotion": "VARCHAR",
+            "journal_pre_notes": "TEXT",
+            "journal_exit_reason": "TEXT",
+            "journal_as_expected": "VARCHAR",
+            "journal_improvement": "TEXT",
+            "journal_post_notes": "TEXT",
+            "ai_review": "TEXT",
+            "ai_review_created_at": "TIMESTAMP",
+            "journal_pre_committed_at": "TIMESTAMP",
+            "journal_rule_tags": "TEXT",
+        },
+        "chart_analyses": {
+            "tag_evaluations": "TEXT",
+            "tag_agreements": "TEXT",
+            "tag_conflicts": "TEXT",
+        },
     }
 
     with engine.connect() as conn:
-        for col_name, col_type in new_columns.items():
-            if col_name not in existing_columns:
-                try:
-                    conn.execute(text(f"ALTER TABLE trades ADD COLUMN {col_name} {col_type}"))
-                    conn.commit()
-                except Exception:
-                    conn.rollback()
+        for table_name, new_columns in tables_to_migrate.items():
+            if table_name not in table_names:
+                continue
+            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+            for col_name, col_type in new_columns.items():
+                if col_name not in existing_columns:
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
