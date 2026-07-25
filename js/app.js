@@ -216,6 +216,8 @@ const journalModal = document.getElementById("journalModal");
 const journalForm = document.getElementById("journalForm");
 let currentJournalTradeId = null;
 
+let linkedAnalysisData = null;
+
 async function openJournalModal(tradeId) {
   currentJournalTradeId = tradeId;
   try {
@@ -226,11 +228,48 @@ async function openJournalModal(tradeId) {
       if (field && trade[key] != null) field.value = trade[key];
     });
     document.getElementById("tradeReviewResult").hidden = true;
+
+    const select = document.getElementById("analysisSelect");
+    try {
+      const analyses = await Api.listAnalyses();
+      select.innerHTML = analyses.map(a =>
+        `<option value="${a.id}">${formatDate(a.created_at)} ${a.currency_pair || ""} ${a.direction || ""}</option>`
+      ).join("");
+    } catch (e) {
+      select.innerHTML = "";
+    }
+
+    linkedAnalysisData = await Api.getLinkedAnalysis(tradeId).catch(() => null);
+    const label = document.getElementById("linkedAnalysisLabel");
+    label.textContent = linkedAnalysisData
+      ? `紐付け中: ${formatDate(linkedAnalysisData.created_at)} ${linkedAnalysisData.currency_pair || ""}`
+      : "紐付けなし";
+
     journalModal.hidden = false;
   } catch (e) {
     alert(e.message);
   }
 }
+
+document.getElementById("linkAnalysisBtn").addEventListener("click", async () => {
+  const select = document.getElementById("analysisSelect");
+  if (!select.value || !currentJournalTradeId) return;
+  try {
+    await Api.linkAnalysis(currentJournalTradeId, parseInt(select.value, 10));
+    linkedAnalysisData = await Api.getLinkedAnalysis(currentJournalTradeId);
+    document.getElementById("linkedAnalysisLabel").textContent =
+      `紐付け中: ${formatDate(linkedAnalysisData.created_at)} ${linkedAnalysisData.currency_pair || ""}`;
+    alert("紐付けました");
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+document.getElementById("quoteAnalysisBtn").addEventListener("click", () => {
+  if (!linkedAnalysisData) { alert("先にチャート分析を紐付けてください"); return; }
+  if (linkedAnalysisData.entry_reason) journalForm.elements["journal_entry_reason"].value = linkedAnalysisData.entry_reason;
+  if (linkedAnalysisData.trend) journalForm.elements["journal_scenario"].value = linkedAnalysisData.trend;
+});
 
 document.getElementById("journalModalClose").addEventListener("click", () => {
   journalModal.hidden = true;
@@ -279,6 +318,7 @@ document.getElementById("tradeReviewBtn").addEventListener("click", async () => 
       section("リスク分析", r.risk_analysis),
       section("決済分析", r.exit_analysis),
       section("心理分析", r.psychology_analysis),
+      section("チャート分析", r.chart_analysis),
       r.summary ? `<div class="reason-block"><span class="k">総合コメント</span>${escapeHtml(r.summary)}</div>` : "",
     ].join("");
   } catch (e) {

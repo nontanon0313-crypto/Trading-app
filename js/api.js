@@ -108,6 +108,22 @@ const Api = {
     return res.json();
   },
 
+  async linkAnalysis(tradeId, analysisId) {
+    const res = await fetch(`${API_BASE}/api/trades/${tradeId}/link-analysis`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysis_id: analysisId }),
+    });
+    if (!res.ok) throw new Error("紐付けに失敗しました");
+    return res.json();
+  },
+
+  async getLinkedAnalysis(tradeId) {
+    const res = await fetch(`${API_BASE}/api/trades/${tradeId}/linked-analysis`);
+    if (!res.ok) throw new Error("紐付け情報の取得に失敗しました");
+    return res.json();
+  },
+
   async reviewTrade(tradeId) {
     const res = await fetch(`${API_BASE}/api/trades/${tradeId}/review`, { method: "POST" });
     if (!res.ok) {

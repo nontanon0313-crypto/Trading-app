@@ -102,6 +102,41 @@ async def create_trades_from_image(
     return {"created_count": len(created), "skipped_count": skipped, "trades": created}
 
 
+@router.patch("/{trade_id}/link-analysis")
+def link_analysis(trade_id: int, body: dict, db: Session = Depends(get_db)):
+    """このトレードに、既存のチャート分析結果を紐付ける"""
+    from app.db.models import ChartAnalysis
+
+    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+
+    analysis_id = body.get("analysis_id")
+    analysis = db.query(ChartAnalysis).filter(ChartAnalysis.id == analysis_id).first()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="チャート分析結果が見つかりません")
+
+    trade.analysis_id = analysis_id
+    db.commit()
+    db.refresh(trade)
+    return trade
+
+
+@router.get("/{trade_id}/linked-analysis")
+def get_linked_analysis(trade_id: int, db: Session = Depends(get_db)):
+    """このトレードに紐付いているチャート分析結果を返す(無ければnull)"""
+    from app.db.models import ChartAnalysis
+
+    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+    if not trade.analysis_id:
+        return None
+
+    analysis = db.query(ChartAnalysis).filter(ChartAnalysis.id == trade.analysis_id).first()
+    return analysis
+
+
 @router.get("/{trade_id}")
 def get_trade(trade_id: int, db: Session = Depends(get_db)):
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
@@ -132,9 +167,10 @@ def list_trades(db: Session = Depends(get_db), limit: int = 100):
 
 @router.post("/{trade_id}/review")
 async def review_trade(trade_id: int, db: Session = Depends(get_db)):
-    """このトレードについて、エントリー/リスク/決済/心理の4カテゴリでAIレビューを実行する"""
+    """このトレードについて、AIレビューを実行する(紐付いたチャート分析があれば併せて考慮する)"""
     import json as _json
     from datetime import datetime as _datetime
+    from app.db.models import ChartAnalysis
 
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
@@ -162,6 +198,21 @@ async def review_trade(trade_id: int, db: Session = Depends(get_db)):
         "journal_improvement": trade.journal_improvement,
         "journal_post_notes": trade.journal_post_notes,
     }
+
+    if trade.analysis_id:
+        analysis = db.query(ChartAnalysis).filter(ChartAnalysis.id == trade.analysis_id).first()
+        if analysis:
+            trade_data["chart_analysis"] = {
+                "trend": analysis.trend,
+                "support_resistance": analysis.support_resistance,
+                "dow_theory": analysis.dow_theory,
+                "candle_pattern": analysis.candle_pattern,
+                "moving_average": analysis.moving_average,
+                "rsi_macd": analysis.rsi_macd,
+                "volatility": analysis.volatility,
+                "entry_reason": analysis.entry_reason,
+                "risk_reward": analysis.risk_reward,
+            }
 
     try:
         review = await asyncio.to_thread(claude_client.analyze_trade_review, trade_data)

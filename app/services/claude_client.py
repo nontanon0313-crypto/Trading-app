@@ -177,8 +177,9 @@ def _safe_json_parse(raw_text: str) -> dict:
 
 TRADE_REVIEW_SYSTEM_PROMPT = """\
 あなたはFXトレードの検証コーチです。1つのトレードのデータ(価格・損益・
-エントリー前後の日記)が渡されます。以下の5つの観点で分析し、
-必ず以下のJSON形式のみで回答してください。データが無い項目は「情報不足のため判断不可」としてください。
+エントリー前後の日記、紐付けられている場合はチャート分析結果)が渡されます。
+以下の観点で分析し、必ず以下のJSON形式のみで回答してください。
+データが無い項目は「情報不足のため判断不可」としてください。
 
 {
   "entry_analysis": {
@@ -201,6 +202,12 @@ TRADE_REVIEW_SYSTEM_PROMPT = """\
     "emotion_impact": "感情が判断へ影響した可能性",
     "rule_violation": "ルール違反の有無",
     "fear_greed_impact": "焦り・欲・恐怖の影響"
+  },
+  "chart_analysis": {
+    "trend_alignment": "エントリーはトレンド/レンジの状況と整合していたか(チャート分析データが無ければ「情報不足のため判断不可」)",
+    "ma_position": "移動平均線との位置関係の評価",
+    "support_resistance": "サポート・レジスタンスを踏まえた評価",
+    "entry_timing_vs_chart": "チャート上のタイミングとして適切だったか"
   },
   "summary": "総合コメント(2-3文)"
 }

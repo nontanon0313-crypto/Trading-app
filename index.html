@@ -137,6 +137,14 @@
       <button class="modal-close" id="journalModalClose">✕</button>
     </div>
     <form id="journalForm" class="form-card">
+      <h3 class="modal-section-title">チャート分析と紐付け</h3>
+      <div class="field">
+        <label id="linkedAnalysisLabel">紐付けなし</label>
+        <select id="analysisSelect"></select>
+      </div>
+      <button type="button" class="btn btn-secondary" id="linkAnalysisBtn">紐付ける</button>
+      <button type="button" class="btn btn-secondary" id="quoteAnalysisBtn">分析結果をエントリー理由/シナリオに引用</button>
+
       <h3 class="modal-section-title">エントリー前</h3>
       <div class="field"><label>エントリー理由</label><textarea name="journal_entry_reason" rows="2"></textarea></div>
       <div class="field"><label>狙ったシナリオ</label><textarea name="journal_scenario" rows="2"></textarea></div>
