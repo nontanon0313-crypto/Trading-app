@@ -35,6 +35,24 @@ def init_db():
     from app.db import models  # noqa: F401  (モデルを読み込ませるためにimport)
     Base.metadata.create_all(bind=engine)
     _migrate_add_missing_columns()
+    _seed_default_rule_tags()
+
+
+def _seed_default_rule_tags():
+    """rule_tagsテーブルが空の場合のみ、デフォルトのルールタグを登録する"""
+    from app.db.models import RuleTag
+    from app.core.default_rule_tags import DEFAULT_RULE_TAGS
+
+    db = SessionLocal()
+    try:
+        if db.query(RuleTag).first() is not None:
+            return
+        for category, names in DEFAULT_RULE_TAGS.items():
+            for name in names:
+                db.add(RuleTag(category=category, name=name))
+        db.commit()
+    finally:
+        db.close()
 
 
 def _migrate_add_missing_columns():

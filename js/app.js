@@ -217,6 +217,54 @@ const journalForm = document.getElementById("journalForm");
 let currentJournalTradeId = null;
 
 let linkedAnalysisData = null;
+let selectedTags = new Set();
+let ruleTagLibrary = {};
+
+function renderTagPicker() {
+  const container = document.getElementById("ruleTagsPicker");
+  const categories = Object.keys(ruleTagLibrary);
+  if (!categories.length) {
+    container.innerHTML = `<span class="hint">タグライブラリが空です</span>`;
+    return;
+  }
+  container.innerHTML = categories.map(cat => `
+    <div>
+      <div class="tag-cat-label">${escapeHtml(cat)}</div>
+      <div class="tag-chips">
+        ${ruleTagLibrary[cat].map(t => `
+          <button type="button" class="tag-chip ${selectedTags.has(t.name) ? "selected" : ""}" data-tag="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  container.querySelectorAll(".tag-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const tag = chip.dataset.tag;
+      if (selectedTags.has(tag)) selectedTags.delete(tag);
+      else selectedTags.add(tag);
+      chip.classList.toggle("selected");
+    });
+  });
+}
+
+document.getElementById("addTagBtn").addEventListener("click", async () => {
+  const catInput = document.getElementById("newTagCategory");
+  const nameInput = document.getElementById("newTagName");
+  const category = catInput.value.trim();
+  const name = nameInput.value.trim();
+  if (!category || !name) { alert("カテゴリとタグ名を入力してください"); return; }
+  try {
+    await Api.addRuleTagToLibrary(category, name);
+    ruleTagLibrary = await Api.getRuleTagLibrary();
+    selectedTags.add(name);
+    renderTagPicker();
+    catInput.value = "";
+    nameInput.value = "";
+  } catch (e) {
+    alert(e.message);
+  }
+});
 
 async function openJournalModal(tradeId) {
   currentJournalTradeId = tradeId;
@@ -229,11 +277,9 @@ async function openJournalModal(tradeId) {
     });
     document.getElementById("tradeReviewResult").hidden = true;
 
-    const tagsInput = document.getElementById("ruleTagsInput");
-    tagsInput.value = Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags.join(", ") : "";
-    Api.getRuleTags().then(tags => {
-      document.getElementById("ruleTagsList").innerHTML = tags.map(t => `<option value="${t}">`).join("");
-    }).catch(() => {});
+    selectedTags = new Set(Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags : []);
+    ruleTagLibrary = await Api.getRuleTagLibrary().catch(() => ({}));
+    renderTagPicker();
 
     const precommitEl = document.getElementById("precommitStatus");
     if (!trade.journal_pre_committed_at) {
@@ -304,8 +350,7 @@ journalForm.addEventListener("submit", async (e) => {
       ? parseFloat(value)
       : value;
   }
-  const tagsRaw = document.getElementById("ruleTagsInput").value;
-  payload.journal_rule_tags = tagsRaw.split(",").map(s => s.trim()).filter(Boolean);
+  payload.journal_rule_tags = Array.from(selectedTags);
   try {
     await Api.updateTradeJournal(currentJournalTradeId, payload);
     journalModal.hidden = true;

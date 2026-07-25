@@ -140,6 +140,19 @@ h1 { font-size: 1.5rem; padding: 20px 20px 0; }
 }
 .field-row { display: flex; gap: 10px; }
 
+.tag-picker { display: flex; flex-direction: column; gap: 10px; }
+.tag-cat-label { font-size: 0.72rem; color: var(--text-muted); }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tag-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+.tag-chip.selected { background: rgba(76,141,255,0.18); border-color: var(--accent); color: var(--accent); }
+
 .modal-overlay {
   position: fixed;
   inset: 0;

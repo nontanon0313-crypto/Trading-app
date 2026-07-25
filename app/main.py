@@ -14,6 +14,7 @@ from app.api import (
     statistics,
     improvement,
     admin,
+    rule_tags,
 )
 
 app = FastAPI(title=settings.APP_NAME)
@@ -33,6 +34,7 @@ app.include_router(verification.router)
 app.include_router(statistics.router)
 app.include_router(improvement.router)
 app.include_router(admin.router)
+app.include_router(rule_tags.router)
 
 
 @app.on_event("startup")

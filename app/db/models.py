@@ -109,6 +109,16 @@ class Verification(Base):
     notes = Column(Text, nullable=True)
 
 
+class RuleTag(Base):
+    """事前記録で使う取引ルールタグのマスタ(カテゴリ別・編集可能)"""
+    __tablename__ = "rule_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ChangeLog(Base):
     """変更履歴・エラー記録テーブル"""
     __tablename__ = "change_logs"

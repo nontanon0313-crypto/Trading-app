@@ -56,6 +56,22 @@ const Api = {
     return res.json();
   },
 
+  async getRuleTagLibrary() {
+    const res = await fetch(`${API_BASE}/api/rule-tags/`);
+    if (!res.ok) return {};
+    return res.json();
+  },
+
+  async addRuleTagToLibrary(category, name) {
+    const res = await fetch(`${API_BASE}/api/rule-tags/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, name }),
+    });
+    if (!res.ok) throw new Error("タグの追加に失敗しました");
+    return res.json();
+  },
+
   async getRuleTags() {
     const res = await fetch(`${API_BASE}/api/trades/rule-tags`);
     if (!res.ok) return [];

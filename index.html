@@ -148,10 +148,14 @@
       <h3 class="modal-section-title">エントリー前</h3>
       <div class="field" id="precommitStatus"></div>
       <div class="field">
-        <label>取引ルール(複数可・カンマ区切り)</label>
-        <input type="text" id="ruleTagsInput" list="ruleTagsList" placeholder="例: トレンドラインブレイク, 下落3波">
-        <datalist id="ruleTagsList"></datalist>
+        <label>取引ルール(複数選択可)</label>
+        <div id="ruleTagsPicker" class="tag-picker"></div>
       </div>
+      <div class="field-row">
+        <input type="text" id="newTagCategory" placeholder="カテゴリ(例: トレンド)">
+        <input type="text" id="newTagName" placeholder="新しいタグ名">
+      </div>
+      <button type="button" class="btn btn-secondary" id="addTagBtn">ライブラリに追加</button>
       <div class="field"><label>エントリー理由</label><textarea name="journal_entry_reason" rows="2"></textarea></div>
       <div class="field"><label>狙ったシナリオ</label><textarea name="journal_scenario" rows="2"></textarea></div>
       <div class="field-row">
