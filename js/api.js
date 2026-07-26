@@ -16,10 +16,21 @@ const Api = {
       formData.append("files", s.file);
       formData.append("timeframes", s.timeframe);
     });
-    const res = await fetch(`${API_BASE}/api/chart-analysis/`, {
-      method: "POST",
-      body: formData,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 65000);
+    let res;
+    try {
+      res = await fetch(`${API_BASE}/api/chart-analysis/`, {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("応答がありませんでした(タイムアウト)。画像の枚数を減らすか、時間をおいて再度お試しください。");
+      throw e;
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "分析に失敗しました");

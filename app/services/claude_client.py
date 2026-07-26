@@ -29,7 +29,8 @@ FALLBACK_MODEL_NAME = "gemini-3.1-flash-lite"
 
 
 def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
-    """Geminiにリクエストを送る。クォータ超過(429)時は自動でフォールバックモデルに切り替える"""
+    """Geminiにリクエストを送る。クォータ超過(429)時は自動でフォールバックモデルに切り替える。
+    応答が遅い場合に無限に固まらないよう、タイムアウトを設定する。"""
     _ensure_configured()
     last_error = None
 
@@ -39,6 +40,7 @@ def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
             response = model.generate_content(
                 contents,
                 generation_config={"max_output_tokens": max_output_tokens},
+                request_options={"timeout": 55},
             )
             return response.text
         except Exception as e:
