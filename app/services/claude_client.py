@@ -259,9 +259,13 @@ def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png", rule_
             {"mime_type": media_type, "data": image_bytes},
             "このチャート画像を分析してください。",
         ],
-        max_output_tokens=4096,
+        max_output_tokens=8192,
     )
-    parsed = _safe_json_parse(_extract_json_object(raw_text.strip()))
+    json_str = _extract_json_object(raw_text.strip())
+    try:
+        parsed = json.loads(json_str)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"AI応答の解析に失敗しました(出力が途中で切れた可能性があります)。応答内容: {raw_text[-500:]}")
     parsed["_raw_response"] = raw_text
     return parsed
 
