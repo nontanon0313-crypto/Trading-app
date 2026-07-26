@@ -55,7 +55,11 @@ def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
 
 
 CHART_ANALYSIS_SYSTEM_PROMPT_HEADER = """\
-あなたはFXチャート分析の専門家です。送られたTradingViewのチャート画像を分析してください。
+あなたはFXチャート分析の専門家です。1〜3枚のTradingViewチャート画像が渡されます。
+それぞれの画像には、どの時間足かのラベル(例: 4時間足・15分足・1分足)が付いています。
+複数枚渡された場合は、上位足で大きな流れを把握し、下位足でエントリータイミングを
+検討するというマルチタイムフレーム分析を行ってください。1枚しか無い場合は、
+その時間足の範囲内で分析し、上位足に関する項目は「画像が無いため判断不可」としてください。
 
 分析方針:
 このチャート分析の目的は、特定の理論が正しいことを証明することではなく、
@@ -65,15 +69,19 @@ CHART_ANALYSIS_SYSTEM_PROMPT_HEADER = """\
 「条件が弱いから省略する」「自信が無いので判定しない」という対応はせず、
 判断が難しい場合は根拠欄に「推定」であることを明示した上で確信度を下げて出力してください。
 
+このツールはエントリー可否を自動判定するものではありません。断定的な「入るべき/待つべき」
+という結論ではなく、条件分岐を含んだ「シナリオ予測」として出力してください
+(例:「レジスタンス付近で反発した場合は下落継続、上抜けした場合は上昇加速」のように)。
+
 評価対象のルールタグ一覧:
 {tag_list}
 
 各タグについて、以下を出力してください。
-- judgment: "yes" | "no" (このチャートにその条件が該当するか)
+- judgment: "yes" | "no" (該当する時間足の画像からその条件が該当するか)
 - confidence: 0-100の整数(確信度)
 - reason: 判定根拠
-- higher_tf_alignment: 上位時間足との整合性についてのコメント(画像から読み取れなければ「画像から判断不可」)
-- direction_impact: "buy" | "sell" | "neutral" (この条件がトレード判断に与える方向性)
+- higher_tf_alignment: 上位時間足との整合性についてのコメント(上位足の画像が無ければ「画像が無いため判断不可」)
+- direction_impact: "buy" | "sell" | "neutral" (この条件が示す方向性)
 
 また、タグ同士で判定が一致している点(agreement_points)と、矛盾している点(conflict_points)も出力してください。
 
@@ -86,15 +94,18 @@ CHART_ANALYSIS_SYSTEM_PROMPT_HEADER = """\
   "stop_loss": 数値 または null,
   "take_profit": 数値 または null,
   "risk_reward": 数値 または null,
-  "trend": "トレンド方向の説明",
+  "trend": "トレンド方向の説明(複数時間足がある場合はそれぞれ言及)",
   "support_resistance": "サポート・レジスタンスの分析",
   "dow_theory": "ダウ理論に基づく判断",
   "candle_pattern": "ローソク足パターンの分析",
   "moving_average": "移動平均線の状況",
   "rsi_macd": "RSI・MACD等インジケータの分析(表示されていなければ「非表示」)",
   "volatility": "ボラティリティの評価",
-  "entry_reason": "エントリー根拠(見送りの場合はnull)",
+  "entry_reason": "このシナリオが有力だと考える根拠(見送りの場合はnull)",
   "skip_reason": "見送るべき理由(見送りでない場合はnull)",
+  "scenario_forecast": [
+    {{"condition": "分岐条件(例: レジスタンス上抜けした場合)", "expected_move": "予想される値動き", "target_level": "目安となる価格帯(不明ならnull)", "confidence": 0-100の整数}}
+  ],
   "tag_evaluations": [
     {{"tag": "タグ名", "judgment": "yes", "confidence": 70, "reason": "...", "higher_tf_alignment": "...", "direction_impact": "buy"}}
   ],
@@ -247,20 +258,21 @@ def _extract_json_array(text: str) -> str:
     return text
 
 
-def analyze_chart_image(image_bytes: bytes, media_type: str = "image/png", rule_tags: list = None) -> dict:
-    """チャート画像をGeminiに送り、構造化された分析結果(ルールタグ網羅評価を含む)を取得する"""
+def analyze_chart_image(images: list, rule_tags: list = None) -> dict:
+    """複数時間足のチャート画像(最大3枚)をGeminiに送り、構造化された分析結果を取得する。
+    images: [{"bytes": ..., "media_type": ..., "timeframe": "4時間足"}, ...]
+    """
     rule_tags = rule_tags or []
     tag_list_text = "\n".join(f"- {t}" for t in rule_tags) if rule_tags else "(タグ未登録)"
     system_prompt = CHART_ANALYSIS_SYSTEM_PROMPT_HEADER.format(tag_list=tag_list_text)
 
-    raw_text = _generate(
-        system_prompt,
-        [
-            {"mime_type": media_type, "data": image_bytes},
-            "このチャート画像を分析してください。",
-        ],
-        max_output_tokens=8192,
-    )
+    contents = []
+    for img in images:
+        contents.append(f"――― 以下は {img['timeframe']} のチャートです ―――")
+        contents.append({"mime_type": img["media_type"], "data": img["bytes"]})
+    contents.append("これらのチャート画像を分析してください。")
+
+    raw_text = _generate(system_prompt, contents, max_output_tokens=8192)
     json_str = _extract_json_object(raw_text.strip())
     try:
         parsed = json.loads(json_str)

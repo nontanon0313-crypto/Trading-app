@@ -9,9 +9,13 @@ const Api = {
     return res.json();
   },
 
-  async analyzeChart(file) {
+  async analyzeChart(slots) {
+    // slots: [{file, timeframe}, ...] (fileがあるものだけ送る)
     const formData = new FormData();
-    formData.append("file", file);
+    slots.filter(s => s.file).forEach(s => {
+      formData.append("files", s.file);
+      formData.append("timeframes", s.timeframe);
+    });
     const res = await fetch(`${API_BASE}/api/chart-analysis/`, {
       method: "POST",
       body: formData,

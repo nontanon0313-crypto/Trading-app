@@ -1,9 +1,10 @@
 """
-チャート画像分析API
+チャート画像分析API(マルチタイムフレーム対応)
 """
 import asyncio
 import json as _json
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from typing import List
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -16,19 +17,27 @@ router = APIRouter(prefix="/api/chart-analysis", tags=["chart-analysis"])
 
 @router.post("/")
 async def analyze_chart(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
+    timeframes: List[str] = Form(...),
     db: Session = Depends(get_db),
 ):
-    """TradingViewのチャート画像をアップロードし、AI分析結果(ルールタグ網羅評価を含む)を返す・保存する"""
-    image_bytes, media_type = await validate_and_read_image(file)
+    """1〜3枚のTradingViewチャート画像(時間足ラベル付き)をアップロードし、
+    マルチタイムフレームのAI分析結果(ルールタグ網羅評価・シナリオ予測を含む)を返す・保存する"""
+    if len(files) != len(timeframes):
+        raise HTTPException(status_code=400, detail="画像の枚数と時間足の数が一致しません")
+    if len(files) > 3:
+        raise HTTPException(status_code=400, detail="画像は最大3枚までです")
+
+    images = []
+    for f, tf in zip(files, timeframes):
+        image_bytes, media_type = await validate_and_read_image(f)
+        images.append({"bytes": image_bytes, "media_type": media_type, "timeframe": tf})
 
     rule_tag_names = [t.name for t in db.query(RuleTag).all()]
 
     try:
         # 同期処理のAI呼び出しがイベントループをブロックしないよう別スレッドで実行
-        result = await asyncio.to_thread(
-            claude_client.analyze_chart_image, image_bytes, media_type, rule_tag_names
-        )
+        result = await asyncio.to_thread(claude_client.analyze_chart_image, images, rule_tag_names)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI分析でエラーが発生しました: {e}")
 
@@ -55,6 +64,8 @@ async def analyze_chart(
         tag_evaluations=_json.dumps(result.get("tag_evaluations", []), ensure_ascii=False),
         tag_agreements=result.get("agreement_points"),
         tag_conflicts=result.get("conflict_points"),
+        scenario_forecast=_json.dumps(result.get("scenario_forecast", []), ensure_ascii=False),
+        timeframes_used=_json.dumps(timeframes, ensure_ascii=False),
     )
     db.add(analysis)
     db.commit()
@@ -79,8 +90,10 @@ def list_analyses(db: Session = Depends(get_db), limit: int = 50):
 
 def _serialize_analysis(analysis: ChartAnalysis) -> dict:
     data = {c.name: getattr(analysis, c.name) for c in analysis.__table__.columns}
-    try:
-        data["tag_evaluations"] = _json.loads(analysis.tag_evaluations) if analysis.tag_evaluations else []
-    except (ValueError, TypeError):
-        data["tag_evaluations"] = []
+    for field in ("tag_evaluations", "scenario_forecast", "timeframes_used"):
+        raw = getattr(analysis, field)
+        try:
+            data[field] = _json.loads(raw) if raw else []
+        except (ValueError, TypeError):
+            data[field] = []
     return data

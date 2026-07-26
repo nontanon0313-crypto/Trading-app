@@ -42,6 +42,10 @@ class ChartAnalysis(Base):
     tag_agreements = Column(Text, nullable=True)            # タグ同士の一致点
     tag_conflicts = Column(Text, nullable=True)             # タグ同士の矛盾点
 
+    # ---- シナリオ予測・MTF(複数時間足) ----
+    scenario_forecast = Column(Text, nullable=True)         # JSON配列: 分岐シナリオ(条件・予想・目標値・確信度)
+    timeframes_used = Column(Text, nullable=True)           # JSON配列: 分析に使った時間足のラベル一覧
+
     trade = relationship("Trade", back_populates="analysis", uselist=False)
 
 

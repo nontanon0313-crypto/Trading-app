@@ -148,6 +148,11 @@ h1 { font-size: 1.5rem; padding: 20px 20px 0; }
 .tag-chip.selected { background: rgba(76,141,255,0.18); border-color: var(--accent); color: var(--accent); }
 .tag-del-btn { background: none; border: none; color: var(--short); font-size: 0.72rem; }
 
+.mtf-slot { margin-bottom: 14px; }
+.mtf-slot .mtf-tf-select { width: 100%; margin-bottom: 6px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 8px 10px; font-size: 0.85rem; }
+.mtf-drop { padding: 20px 16px; }
+.mtf-preview { margin-top: 8px; }
+
 .modal-overlay {
   position: fixed;
   inset: 0;

@@ -27,26 +27,35 @@ async function checkApiStatus() {
   }
 }
 
-// ---------- ①チャート分析 ----------
-const chartFileInput = document.getElementById("chartFileInput");
-const uploadDrop = document.getElementById("uploadDrop");
-const chartPreview = document.getElementById("chartPreview");
+// ---------- ①チャート分析(マルチタイムフレーム) ----------
 const analyzeBtn = document.getElementById("analyzeBtn");
 const analysisResult = document.getElementById("analysisResult");
 
-let selectedFile = null;
+const mtfSlots = Array.from(document.querySelectorAll(".mtf-slot")).map(slotEl => ({
+  el: slotEl,
+  tfSelect: slotEl.querySelector(".mtf-tf-select"),
+  drop: slotEl.querySelector(".mtf-drop"),
+  preview: slotEl.querySelector(".mtf-preview"),
+  file: null,
+}));
 
-uploadDrop.addEventListener("click", () => chartFileInput.click());
-
-chartFileInput.addEventListener("change", () => {
-  const file = chartFileInput.files[0];
-  if (!file) return;
-  selectedFile = file;
-  const url = URL.createObjectURL(file);
-  chartPreview.src = url;
-  chartPreview.hidden = false;
-  analyzeBtn.hidden = false;
-  analysisResult.hidden = true;
+mtfSlots.forEach(slot => {
+  slot.drop.addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => {
+      const file = input.files[0];
+      if (!file) return;
+      slot.file = file;
+      slot.preview.src = URL.createObjectURL(file);
+      slot.preview.hidden = false;
+      slot.drop.querySelector("p").textContent = file.name;
+      analysisResult.hidden = true;
+      analyzeBtn.hidden = !mtfSlots.some(s => s.file);
+    });
+    input.click();
+  });
 });
 
 const DIRECTION_LABEL = { long: "ロング", short: "ショート", skip: "見送り" };
@@ -89,6 +98,14 @@ function renderAnalysis(result) {
     if (value) html += `<div class="reason-block"><span class="k">${label}</span>${escapeHtml(value)}</div>`;
   });
 
+  if (Array.isArray(result.scenario_forecast) && result.scenario_forecast.length) {
+    html += `<div class="reason-block"><span class="k">シナリオ予測</span>`;
+    html += result.scenario_forecast.map(s =>
+      `${escapeHtml(s.condition || "")}: ${escapeHtml(s.expected_move || "")}${s.target_level ? "(目安: " + escapeHtml(String(s.target_level)) + ")" : ""}${s.confidence != null ? " [確信度" + s.confidence + "%]" : ""}`
+    ).join("<br>");
+    html += `</div>`;
+  }
+
   if (result.agreement_points) {
     html += `<div class="reason-block"><span class="k">タグ間の一致点</span>${escapeHtml(result.agreement_points)}</div>`;
   }
@@ -111,11 +128,13 @@ function renderAnalysis(result) {
 }
 
 analyzeBtn.addEventListener("click", async () => {
-  if (!selectedFile) return;
+  const slotsWithFiles = mtfSlots.filter(s => s.file);
+  if (!slotsWithFiles.length) return;
   analyzeBtn.disabled = true;
   analyzeBtn.textContent = "分析中...";
   try {
-    const result = await Api.analyzeChart(selectedFile);
+    const payload = mtfSlots.map(s => ({ file: s.file, timeframe: s.tfSelect.value }));
+    const result = await Api.analyzeChart(payload);
     renderAnalysis(result);
     loadAnalysisHistory();
   } catch (e) {

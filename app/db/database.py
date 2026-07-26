@@ -39,17 +39,17 @@ def init_db():
 
 
 def _seed_default_rule_tags():
-    """rule_tagsテーブルが空の場合のみ、デフォルトのルールタグを登録する"""
+    """デフォルトのルールタグのうち、まだ登録されていないものだけを追加する(タグ単位で冪等)"""
     from app.db.models import RuleTag
     from app.core.default_rule_tags import DEFAULT_RULE_TAGS
 
     db = SessionLocal()
     try:
-        if db.query(RuleTag).first() is not None:
-            return
+        existing = {(t.category, t.name) for t in db.query(RuleTag).all()}
         for category, names in DEFAULT_RULE_TAGS.items():
             for name in names:
-                db.add(RuleTag(category=category, name=name))
+                if (category, name) not in existing:
+                    db.add(RuleTag(category=category, name=name))
         db.commit()
     finally:
         db.close()
@@ -88,6 +88,8 @@ def _migrate_add_missing_columns():
             "tag_evaluations": "TEXT",
             "tag_agreements": "TEXT",
             "tag_conflicts": "TEXT",
+            "scenario_forecast": "TEXT",
+            "timeframes_used": "TEXT",
         },
     }
 

@@ -38,19 +38,54 @@
   <!-- ① チャート分析 -->
   <section class="view" id="view-analysis" data-view="analysis">
     <h1>チャート分析</h1>
-    <p class="lede">TradingViewのチャート画像をアップロードすると、AIがエントリー・損切り・利確を判定します。</p>
+    <p class="lede">上位足〜下位足のチャート画像をアップロードすると、AIがマルチタイムフレームで分析します(1枚のみでも可)。</p>
 
     <div class="upload-card" id="uploadCard">
-      <input type="file" id="chartFileInput" accept="image/*" hidden>
-      <div class="upload-drop" id="uploadDrop">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7C8B99" stroke-width="1.6">
-          <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <p>タップして画像を選択</p>
-        <span class="hint">またはカメラで撮影</span>
+      <div class="mtf-slot" data-slot="0">
+        <select class="mtf-tf-select">
+          <option value="4時間足">4時間足</option>
+          <option value="1時間足">1時間足</option>
+          <option value="15分足">15分足</option>
+          <option value="5分足">5分足</option>
+          <option value="1分足">1分足</option>
+          <option value="日足">日足</option>
+        </select>
+        <input type="file" class="mtf-file-input" accept="image/*" hidden>
+        <div class="upload-drop mtf-drop">
+          <p>タップして画像を選択</p>
+        </div>
+        <img class="chart-preview mtf-preview" hidden>
       </div>
-      <img id="chartPreview" class="chart-preview" hidden>
+      <div class="mtf-slot" data-slot="1">
+        <select class="mtf-tf-select">
+          <option value="4時間足">4時間足</option>
+          <option value="1時間足">1時間足</option>
+          <option value="15分足" selected>15分足</option>
+          <option value="5分足">5分足</option>
+          <option value="1分足">1分足</option>
+          <option value="日足">日足</option>
+        </select>
+        <input type="file" class="mtf-file-input" accept="image/*" hidden>
+        <div class="upload-drop mtf-drop">
+          <p>タップして画像を選択(任意)</p>
+        </div>
+        <img class="chart-preview mtf-preview" hidden>
+      </div>
+      <div class="mtf-slot" data-slot="2">
+        <select class="mtf-tf-select">
+          <option value="4時間足">4時間足</option>
+          <option value="1時間足">1時間足</option>
+          <option value="15分足">15分足</option>
+          <option value="5分足">5分足</option>
+          <option value="1分足" selected>1分足</option>
+          <option value="日足">日足</option>
+        </select>
+        <input type="file" class="mtf-file-input" accept="image/*" hidden>
+        <div class="upload-drop mtf-drop">
+          <p>タップして画像を選択(任意)</p>
+        </div>
+        <img class="chart-preview mtf-preview" hidden>
+      </div>
       <button class="btn btn-primary" id="analyzeBtn" hidden>この画像を分析する</button>
     </div>
 
