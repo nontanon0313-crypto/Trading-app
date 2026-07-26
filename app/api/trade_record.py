@@ -184,6 +184,16 @@ def get_linked_analysis(trade_id: int, db: Session = Depends(get_db)):
     return db.query(ChartAnalysis).filter(ChartAnalysis.id == trade.analysis_id).first()
 
 
+@router.get("/currency-pairs")
+def list_currency_pairs(db: Session = Depends(get_db)):
+    """過去に使われた通貨ペア名の一覧(表記ゆれ防止のための選択候補用)"""
+    from app.db.models import ChartAnalysis
+
+    trade_pairs = {r[0] for r in db.query(Trade.currency_pair).distinct().all() if r[0]}
+    analysis_pairs = {r[0] for r in db.query(ChartAnalysis.currency_pair).distinct().all() if r[0]}
+    return sorted(trade_pairs | analysis_pairs)
+
+
 @router.get("/rule-tags")
 def list_rule_tags(db: Session = Depends(get_db)):
     """過去に使われたルールタグの一覧(入力候補用)を返す"""

@@ -41,7 +41,7 @@
     <p class="lede">TradingViewのチャート画像をアップロードすると、AIがエントリー・損切り・利確を判定します。</p>
 
     <div class="upload-card" id="uploadCard">
-      <input type="file" id="chartFileInput" accept="image/*" capture="environment" hidden>
+      <input type="file" id="chartFileInput" accept="image/*" hidden>
       <div class="upload-drop" id="uploadDrop">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7C8B99" stroke-width="1.6">
           <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -67,7 +67,13 @@
 
     <form class="card form-card" id="quickEntryForm">
       <div class="field-row">
-        <div class="field"><label>通貨ペア</label><input type="text" name="currency_pair" placeholder="USDJPY" required></div>
+        <div class="field">
+          <label>通貨ペア</label>
+          <select name="currency_pair" id="quickEntryPairSelect" required>
+            <option value="__new__">+ 新しい通貨ペアを入力</option>
+          </select>
+          <input type="text" id="quickEntryPairNew" placeholder="例: USDJPY" hidden>
+        </div>
         <div class="field">
           <label>方向</label>
           <select name="side" required>
@@ -128,6 +134,19 @@
 
     <button class="btn btn-secondary" id="milestoneBtn">節目分析を実行(20件以上で利用可)</button>
     <div class="result-card" id="milestoneResult" hidden></div>
+
+    <h2 class="section-title">仮説検証</h2>
+    <p class="lede">「この条件は期待値が高そうだ」という仮説を登録すると、登録日以降のトレードだけで再現性を確認できます(後付け検証を防ぐため)。</p>
+    <form class="card form-card" id="hypothesisForm">
+      <div class="field"><label>仮説の名前</label><input type="text" name="name" placeholder="例: トレンドライン+高値ブレイクは期待値が高い" required></div>
+      <div class="field">
+        <label>対象タグ(すべて満たす場合のみ集計)</label>
+        <div id="hypothesisTagsPicker" class="tag-picker"></div>
+      </div>
+      <div class="field"><label>メモ</label><textarea name="notes" rows="2"></textarea></div>
+      <button type="submit" class="btn btn-primary">仮説を登録する</button>
+    </form>
+    <div id="hypothesisList" class="list"></div>
 
     <button class="btn btn-danger" id="clearDataBtn">全データを削除する</button>
   </section>

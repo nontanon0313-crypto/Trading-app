@@ -6,7 +6,7 @@ function switchView(name) {
   views.forEach(v => v.hidden = v.dataset.view !== name);
   tabs.forEach(t => t.classList.toggle("active", t.dataset.view === name));
   if (name === "trades") loadTrades();
-  if (name === "stats") { loadStatistics(); loadCalendar(); }
+  if (name === "stats") { loadStatistics(); loadCalendar(); loadHypotheses(); }
 }
 
 tabs.forEach(tab => {
@@ -154,11 +154,32 @@ async function loadAnalysisHistory() {
 }
 
 // ---------- ②エントリー即時記録 ----------
+const pairSelect = document.getElementById("quickEntryPairSelect");
+const pairNewInput = document.getElementById("quickEntryPairNew");
+
+async function loadCurrencyPairOptions() {
+  try {
+    const pairs = await Api.getCurrencyPairs();
+    pairSelect.innerHTML = pairs.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("")
+      + `<option value="__new__">+ 新しい通貨ペアを入力</option>`;
+  } catch (e) {
+    pairSelect.innerHTML = `<option value="__new__">+ 新しい通貨ペアを入力</option>`;
+  }
+}
+loadCurrencyPairOptions();
+
+pairSelect.addEventListener("change", () => {
+  pairNewInput.hidden = pairSelect.value !== "__new__";
+});
+
 document.getElementById("quickEntryForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const formData = new FormData(e.target);
+  const currencyPair = pairSelect.value === "__new__" ? pairNewInput.value.trim() : pairSelect.value;
+  if (!currencyPair) { alert("通貨ペアを入力してください"); return; }
+
   const payload = {
-    currency_pair: formData.get("currency_pair"),
+    currency_pair: currencyPair,
     side: formData.get("side"),
     entry_price: parseFloat(formData.get("entry_price")),
     entry_datetime: new Date().toISOString(),
@@ -169,6 +190,9 @@ document.getElementById("quickEntryForm").addEventListener("submit", async (e) =
   try {
     const trade = await Api.createTrade(payload);
     e.target.reset();
+    pairNewInput.hidden = true;
+    pairNewInput.value = "";
+    loadCurrencyPairOptions();
     loadTrades();
     openJournalModal(trade.id);
   } catch (err) {
@@ -334,11 +358,13 @@ async function openJournalModal(tradeId) {
     const select = document.getElementById("analysisSelect");
     try {
       const analyses = await Api.listAnalyses();
-      select.innerHTML = analyses.map(a =>
-        `<option value="${a.id}">${formatDate(a.created_at)} ${a.currency_pair || ""} ${a.direction || ""}</option>`
-      ).join("");
+      select.innerHTML = analyses.length
+        ? analyses.map(a =>
+            `<option value="${a.id}">${formatDate(a.created_at)} ${a.currency_pair || ""} ${a.direction || ""}</option>`
+          ).join("")
+        : `<option value="">まだチャート分析の履歴がありません</option>`;
     } catch (e) {
-      select.innerHTML = "";
+      select.innerHTML = `<option value="">分析履歴を取得できませんでした</option>`;
     }
 
     linkedAnalysisData = await Api.getLinkedAnalysis(tradeId).catch(() => null);
@@ -355,7 +381,8 @@ async function openJournalModal(tradeId) {
 
 document.getElementById("linkAnalysisBtn").addEventListener("click", async () => {
   const select = document.getElementById("analysisSelect");
-  if (!select.value || !currentJournalTradeId) return;
+  if (!currentJournalTradeId) return;
+  if (!select.value) { alert("紐付けるチャート分析がありません。先に「分析」タブでチャート画像を分析してください。"); return; }
   try {
     await Api.linkAnalysis(currentJournalTradeId, parseInt(select.value, 10));
     linkedAnalysisData = await Api.getLinkedAnalysis(currentJournalTradeId);
@@ -618,6 +645,99 @@ document.getElementById("milestoneBtn").addEventListener("click", async () => {
     btn.textContent = "節目分析を実行(20件以上で利用可)";
   }
 });
+
+// ---------- 仮説検証 ----------
+let hypothesisSelectedTags = new Set();
+
+async function renderHypothesisTagPicker() {
+  const container = document.getElementById("hypothesisTagsPicker");
+  const library = await Api.getRuleTagLibrary().catch(() => ({}));
+  const categories = Object.keys(library);
+  if (!categories.length) {
+    container.innerHTML = `<span class="hint">タグライブラリが空です</span>`;
+    return;
+  }
+  container.innerHTML = categories.map(cat => `
+    <div>
+      <div class="tag-cat-label">${escapeHtml(cat)}</div>
+      <div class="tag-chips">
+        ${library[cat].map(t => `
+          <button type="button" class="tag-chip ${hypothesisSelectedTags.has(t.name) ? "selected" : ""}" data-tag="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  container.querySelectorAll(".tag-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const tag = chip.dataset.tag;
+      if (hypothesisSelectedTags.has(tag)) hypothesisSelectedTags.delete(tag);
+      else hypothesisSelectedTags.add(tag);
+      chip.classList.toggle("selected");
+    });
+  });
+}
+
+document.getElementById("hypothesisForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!hypothesisSelectedTags.size) { alert("対象タグを1つ以上選んでください"); return; }
+  const formData = new FormData(e.target);
+  const payload = {
+    name: formData.get("name"),
+    notes: formData.get("notes") || null,
+    tags: Array.from(hypothesisSelectedTags),
+  };
+  try {
+    await Api.createHypothesis(payload);
+    e.target.reset();
+    hypothesisSelectedTags = new Set();
+    renderHypothesisTagPicker();
+    loadHypotheses();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+async function loadHypotheses() {
+  renderHypothesisTagPicker();
+  const container = document.getElementById("hypothesisList");
+  try {
+    const hypotheses = await Api.listHypotheses();
+    if (!hypotheses.length) {
+      container.innerHTML = `<div class="empty-state">まだ登録された仮説がありません</div>`;
+      return;
+    }
+    container.innerHTML = hypotheses.map(h => {
+      const sr = h.verification.since_registration;
+      const ref = h.verification.all_time_reference;
+      return `
+        <div class="list-item">
+          <div class="top-row"><span class="pair">${escapeHtml(h.name)}</span>
+            <button class="tag-del-btn" data-id="${h.id}">削除</button>
+          </div>
+          <div class="meta">対象タグ: ${h.tags.map(escapeHtml).join(" / ")}</div>
+          <div class="reason-block">
+            <span class="k">登録後のみ(検証用) - ${formatDate(h.created_at)}以降</span>
+            ${sr.trade_count}件 ・ 勝率 ${fmtPct(sr.win_rate)} ・ 期待値 ${sr.expectancy ?? "-"}
+          </div>
+          <div class="reason-block">
+            <span class="k">全期間(参考・後付け含む)</span>
+            ${ref.trade_count}件 ・ 勝率 ${fmtPct(ref.win_rate)} ・ 期待値 ${ref.expectancy ?? "-"}
+          </div>
+        </div>
+      `;
+    }).join("");
+    container.querySelectorAll(".tag-del-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("この仮説を削除しますか?")) return;
+        await Api.deleteHypothesis(btn.dataset.id);
+        loadHypotheses();
+      });
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state">仮説一覧を取得できませんでした</div>`;
+  }
+}
 
 document.getElementById("clearDataBtn").addEventListener("click", async () => {
   if (!confirm("すべてのデータ(分析履歴・トレード記録)を削除します。元に戻せません。よろしいですか?")) return;

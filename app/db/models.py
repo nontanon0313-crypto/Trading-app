@@ -114,6 +114,18 @@ class Verification(Base):
     notes = Column(Text, nullable=True)
 
 
+class Hypothesis(Base):
+    """仮説(条件の組み合わせ)を登録し、登録日以降のデータだけで再現性を検証するためのテーブル"""
+    __tablename__ = "hypotheses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    name = Column(String, nullable=False)          # 仮説の名前(例: トレンドライン+高値ブレイクは期待値が高い)
+    tags = Column(Text, nullable=False)             # JSON配列文字列(この仮説が対象とするルールタグの組み合わせ、AND条件)
+    notes = Column(Text, nullable=True)             # メモ
+
+
 class RuleTag(Base):
     """事前記録で使う取引ルールタグのマスタ(カテゴリ別・編集可能)"""
     __tablename__ = "rule_tags"

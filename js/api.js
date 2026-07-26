@@ -56,6 +56,12 @@ const Api = {
     return res.json();
   },
 
+  async getCurrencyPairs() {
+    const res = await fetch(`${API_BASE}/api/trades/currency-pairs`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
   async getRuleTagLibrary() {
     const res = await fetch(`${API_BASE}/api/rule-tags/`);
     if (!res.ok) return {};
@@ -161,6 +167,31 @@ const Api = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "節目分析の取得に失敗しました");
     }
+    return res.json();
+  },
+
+  async listHypotheses() {
+    const res = await fetch(`${API_BASE}/api/hypotheses/`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
+  async createHypothesis(payload) {
+    const res = await fetch(`${API_BASE}/api/hypotheses/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "仮説の登録に失敗しました");
+    }
+    return res.json();
+  },
+
+  async deleteHypothesis(id) {
+    const res = await fetch(`${API_BASE}/api/hypotheses/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("仮説の削除に失敗しました");
     return res.json();
   },
 };
