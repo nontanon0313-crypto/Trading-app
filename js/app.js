@@ -154,11 +154,11 @@ async function loadAnalysisHistory() {
       container.innerHTML = `<div class="empty-state">まだ分析履歴がありません</div>`;
       return;
     }
-    container.innerHTML = items.map(a => {
+    container.innerHTML = items.map((a, idx) => {
       const dir = a.direction || "skip";
       const badgeClass = dir === "long" ? "long" : dir === "short" ? "short" : "skip";
       return `
-        <div class="list-item">
+        <div class="list-item" data-idx="${idx}">
           <div class="top-row">
             <span class="pair">${a.currency_pair || "-"}</span>
             <span class="direction-badge ${badgeClass}">${DIRECTION_LABEL[dir] || dir}</span>
@@ -166,7 +166,23 @@ async function loadAnalysisHistory() {
           <div class="meta">${formatDate(a.created_at)}</div>
         </div>
       `;
-    }).join("");
+    }).join("") + `<div class="result-card" id="historyScenarioDetail" hidden></div>`;
+
+    container.querySelectorAll(".list-item[data-idx]").forEach(el => {
+      el.addEventListener("click", () => {
+        const item = items[parseInt(el.dataset.idx, 10)];
+        const detail = document.getElementById("historyScenarioDetail");
+        const scenarios = item.scenario_forecast;
+        detail.hidden = false;
+        detail.innerHTML = (Array.isArray(scenarios) && scenarios.length)
+          ? `<div class="reason-block"><span class="k">シナリオ予測</span>` +
+            scenarios.map(s =>
+              `${escapeHtml(s.condition || "")}: ${escapeHtml(s.expected_move || "")}${s.target_level ? "(目安: " + escapeHtml(String(s.target_level)) + ")" : ""}${s.confidence != null ? " [確信度" + s.confidence + "%]" : ""}`
+            ).join("<br>") + `</div>`
+          : `<div class="reason-block">この分析にはシナリオ予測がありません</div>`;
+        detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    });
   } catch (e) {
     container.innerHTML = `<div class="empty-state">履歴を取得できませんでした</div>`;
   }
