@@ -34,10 +34,13 @@ async def analyze_chart(
         images.append({"bytes": image_bytes, "media_type": media_type, "timeframe": tf})
 
     rule_tag_names = [t.name for t in db.query(RuleTag).all()]
+    entry_timeframe = _shortest_timeframe(timeframes)
 
     try:
         # 同期処理のAI呼び出しがイベントループをブロックしないよう別スレッドで実行
-        result = await asyncio.to_thread(claude_client.analyze_chart_image, images, rule_tag_names)
+        result = await asyncio.to_thread(
+            claude_client.analyze_chart_image, images, rule_tag_names, entry_timeframe
+        )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI分析でエラーが発生しました: {e}")
 
@@ -72,6 +75,13 @@ async def analyze_chart(
     db.refresh(analysis)
 
     return {"id": analysis.id, **result}
+
+
+def _shortest_timeframe(timeframes: List[str]) -> str:
+    """渡された時間足ラベルの中で、もっとも短い(=エントリー時間足とみなす)ものを返す"""
+    order = ["週足", "日足", "4時間足", "1時間足", "15分足", "5分足", "1分足"]
+    ranked = sorted(timeframes, key=lambda tf: order.index(tf) if tf in order else -1, reverse=True)
+    return ranked[0] if ranked else "不明"
 
 
 @router.get("/{analysis_id}")

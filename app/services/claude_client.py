@@ -59,9 +59,12 @@ def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
 CHART_ANALYSIS_SYSTEM_PROMPT_HEADER = """\
 あなたはFXチャート分析の専門家です。1〜3枚のTradingViewチャート画像が渡されます。
 それぞれの画像には、どの時間足かのラベル(例: 4時間足・15分足・1分足)が付いています。
-複数枚渡された場合は、上位足で大きな流れを把握し、下位足でエントリータイミングを
-検討するというマルチタイムフレーム分析を行ってください。1枚しか無い場合は、
-その時間足の範囲内で分析し、上位足に関する項目は「画像が無いため判断不可」としてください。
+
+このユーザーの実際のエントリー時間足は「{entry_timeframe}」です。
+上位足(4時間足・15分足など)は、あくまで大きな流れ・バイアスを把握するための「文脈」として使い、
+scenario_forecast(シナリオ予測)は必ず「{entry_timeframe}」チャート上の値動きを中心に組み立ててください。
+上位足の分析ばかりを詳しく書いて、肝心のエントリー足のシナリオが薄くならないよう注意してください。
+上位足の画像が無い場合は、その時間足に関する項目は「画像が無いため判断不可」としてください。
 
 分析方針:
 このチャート分析の目的は、特定の理論が正しいことを証明することではなく、
@@ -73,7 +76,7 @@ CHART_ANALYSIS_SYSTEM_PROMPT_HEADER = """\
 
 このツールはエントリー可否を自動判定するものではありません。断定的な「入るべき/待つべき」
 という結論ではなく、条件分岐を含んだ「シナリオ予測」として出力してください
-(例:「レジスタンス付近で反発した場合は下落継続、上抜けした場合は上昇加速」のように)。
+(例:「{entry_timeframe}でレジスタンス付近まで来て反発した場合は下落継続、上抜けした場合は上昇加速」のように)。
 
 評価対象のルールタグ一覧:
 {tag_list}
@@ -260,13 +263,15 @@ def _extract_json_array(text: str) -> str:
     return text
 
 
-def analyze_chart_image(images: list, rule_tags: list = None) -> dict:
+def analyze_chart_image(images: list, rule_tags: list = None, entry_timeframe: str = None) -> dict:
     """複数時間足のチャート画像(最大3枚)をGeminiに送り、構造化された分析結果を取得する。
     images: [{"bytes": ..., "media_type": ..., "timeframe": "4時間足"}, ...]
+    entry_timeframe: シナリオ予測の中心にする、実際のエントリー時間足
     """
     rule_tags = rule_tags or []
     tag_list_text = "\n".join(f"- {t}" for t in rule_tags) if rule_tags else "(タグ未登録)"
-    system_prompt = CHART_ANALYSIS_SYSTEM_PROMPT_HEADER.format(tag_list=tag_list_text)
+    tf_label = entry_timeframe or (images[-1]["timeframe"] if images else "不明")
+    system_prompt = CHART_ANALYSIS_SYSTEM_PROMPT_HEADER.format(tag_list=tag_list_text, entry_timeframe=tf_label)
 
     contents = []
     for img in images:
