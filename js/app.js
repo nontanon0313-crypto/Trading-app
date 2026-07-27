@@ -200,6 +200,8 @@ async function loadCurrencyPairOptions() {
   } catch (e) {
     pairSelect.innerHTML = `<option value="__new__">+ 新しい通貨ペアを入力</option>`;
   }
+  // 選択肢が「新規入力」しか無い場合、changeイベントが発火しないため手動で入力欄を出す
+  pairNewInput.hidden = pairSelect.value !== "__new__";
 }
 loadCurrencyPairOptions();
 
