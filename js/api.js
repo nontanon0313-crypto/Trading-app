@@ -105,6 +105,19 @@ const Api = {
     return res.json();
   },
 
+  async updateTradeInfo(tradeId, payload) {
+    const res = await fetch(`${API_BASE}/api/trades/${tradeId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "基本情報の保存に失敗しました");
+    }
+    return res.json();
+  },
+
   async updateTradeJournal(tradeId, payload) {
     const res = await fetch(`${API_BASE}/api/trades/${tradeId}/journal`, {
       method: "PATCH",

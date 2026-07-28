@@ -154,6 +154,33 @@ def _find_matching_open_trade(db: Session, row: dict):
     return candidates[0]
 
 
+class TradeUpdate(BaseModel):
+    """トレードの基本情報(通貨ペア・方向・価格・ロット等)を後から修正するための項目。すべて任意。"""
+    currency_pair: Optional[str] = None
+    side: Optional[str] = None
+    entry_price: Optional[float] = None
+    exit_price: Optional[float] = None
+    profit_loss: Optional[float] = None
+    lot_size: Optional[float] = None
+    entry_datetime: Optional[datetime] = None
+    exit_datetime: Optional[datetime] = None
+
+
+@router.patch("/{trade_id}")
+def update_trade(trade_id: int, trade_in: TradeUpdate, db: Session = Depends(get_db)):
+    """入力ミス(ロング/ショートの取り違え、価格の誤入力等)を後から修正する"""
+    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+
+    for field, value in trade_in.model_dump(exclude_unset=True).items():
+        setattr(trade, field, value)
+
+    db.commit()
+    db.refresh(trade)
+    return _serialize_trade(trade)
+
+
 @router.patch("/{trade_id}/link-analysis")
 def link_analysis(trade_id: int, body: dict, db: Session = Depends(get_db)):
     """このトレードに、既存のチャート分析結果を紐付ける"""

@@ -379,6 +379,13 @@ async function openJournalModal(tradeId) {
     });
     document.getElementById("tradeReviewResult").hidden = true;
 
+    document.getElementById("editCurrencyPair").value = trade.currency_pair || "";
+    document.getElementById("editSide").value = trade.side || "buy";
+    document.getElementById("editEntryPrice").value = trade.entry_price ?? "";
+    document.getElementById("editExitPrice").value = trade.exit_price ?? "";
+    document.getElementById("editProfitLoss").value = trade.profit_loss ?? "";
+    document.getElementById("editLotSize").value = trade.lot_size ?? "";
+
     selectedTags = new Set(Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags : []);
     ruleTagLibrary = await Api.getRuleTagLibrary().catch(() => ({}));
     renderTagPicker();
@@ -435,6 +442,31 @@ document.getElementById("quoteAnalysisBtn").addEventListener("click", () => {
   if (!linkedAnalysisData) { alert("先にチャート分析を紐付けてください"); return; }
   if (linkedAnalysisData.entry_reason) journalForm.elements["journal_entry_reason"].value = linkedAnalysisData.entry_reason;
   if (linkedAnalysisData.trend) journalForm.elements["journal_scenario"].value = linkedAnalysisData.trend;
+});
+
+document.getElementById("saveTradeInfoBtn").addEventListener("click", async () => {
+  if (!currentJournalTradeId) return;
+  const val = (id) => {
+    const v = document.getElementById(id).value;
+    return v === "" ? null : v;
+  };
+  const payload = {
+    currency_pair: val("editCurrencyPair"),
+    side: val("editSide"),
+    entry_price: val("editEntryPrice") != null ? parseFloat(val("editEntryPrice")) : null,
+    exit_price: val("editExitPrice") != null ? parseFloat(val("editExitPrice")) : null,
+    profit_loss: val("editProfitLoss") != null ? parseFloat(val("editProfitLoss")) : null,
+    lot_size: val("editLotSize") != null ? parseFloat(val("editLotSize")) : null,
+  };
+  // nullのキーは送らない(未入力のまま上書きしてしまうのを防ぐ)
+  Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
+  try {
+    await Api.updateTradeInfo(currentJournalTradeId, payload);
+    loadTrades();
+    alert("基本情報を保存しました");
+  } catch (e) {
+    alert(e.message);
+  }
 });
 
 document.getElementById("journalModalClose").addEventListener("click", () => {
