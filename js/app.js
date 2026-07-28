@@ -445,27 +445,40 @@ document.getElementById("quoteAnalysisBtn").addEventListener("click", () => {
 });
 
 document.getElementById("saveTradeInfoBtn").addEventListener("click", async () => {
-  if (!currentJournalTradeId) return;
-  const val = (id) => {
-    const v = document.getElementById(id).value;
-    return v === "" ? null : v;
-  };
-  const payload = {
-    currency_pair: val("editCurrencyPair"),
-    side: val("editSide"),
-    entry_price: val("editEntryPrice") != null ? parseFloat(val("editEntryPrice")) : null,
-    exit_price: val("editExitPrice") != null ? parseFloat(val("editExitPrice")) : null,
-    profit_loss: val("editProfitLoss") != null ? parseFloat(val("editProfitLoss")) : null,
-    lot_size: val("editLotSize") != null ? parseFloat(val("editLotSize")) : null,
-  };
-  // nullのキーは送らない(未入力のまま上書きしてしまうのを防ぐ)
-  Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
   try {
+    if (!currentJournalTradeId) { alert("トレードが選択されていません"); return; }
+    const val = (id) => {
+      const el = document.getElementById(id);
+      if (!el) throw new Error(`要素が見つかりません: ${id}`);
+      return el.value === "" ? null : el.value;
+    };
+    const payload = {
+      currency_pair: val("editCurrencyPair"),
+      side: val("editSide"),
+      entry_price: val("editEntryPrice") != null ? parseFloat(val("editEntryPrice")) : null,
+      exit_price: val("editExitPrice") != null ? parseFloat(val("editExitPrice")) : null,
+      profit_loss: val("editProfitLoss") != null ? parseFloat(val("editProfitLoss")) : null,
+      lot_size: val("editLotSize") != null ? parseFloat(val("editLotSize")) : null,
+    };
+    // nullのキーは送らない(未入力のまま上書きしてしまうのを防ぐ)
+    Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
     await Api.updateTradeInfo(currentJournalTradeId, payload);
     loadTrades();
     alert("基本情報を保存しました");
   } catch (e) {
-    alert(e.message);
+    alert("エラー: " + e.message);
+  }
+});
+
+document.getElementById("deleteTradeBtn").addEventListener("click", async () => {
+  try {
+    if (!currentJournalTradeId) return;
+    if (!confirm("このトレード記録を削除します。元に戻せません。よろしいですか?")) return;
+    await Api.deleteTrade(currentJournalTradeId);
+    journalModal.hidden = true;
+    loadTrades();
+  } catch (e) {
+    alert("エラー: " + e.message);
   }
 });
 

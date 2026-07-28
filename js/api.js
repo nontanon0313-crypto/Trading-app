@@ -105,6 +105,12 @@ const Api = {
     return res.json();
   },
 
+  async deleteTrade(tradeId) {
+    const res = await fetch(`${API_BASE}/api/trades/${tradeId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("削除に失敗しました");
+    return res.json();
+  },
+
   async updateTradeInfo(tradeId, payload) {
     const res = await fetch(`${API_BASE}/api/trades/${tradeId}`, {
       method: "PATCH",

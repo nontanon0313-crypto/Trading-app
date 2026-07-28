@@ -211,6 +211,17 @@ def get_linked_analysis(trade_id: int, db: Session = Depends(get_db)):
     return db.query(ChartAnalysis).filter(ChartAnalysis.id == trade.analysis_id).first()
 
 
+@router.delete("/{trade_id}")
+def delete_trade(trade_id: int, db: Session = Depends(get_db)):
+    """トレード記録を1件削除する(重複統合などのため)"""
+    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
+    db.delete(trade)
+    db.commit()
+    return {"status": "deleted"}
+
+
 @router.get("/currency-pairs")
 def list_currency_pairs(db: Session = Depends(get_db)):
     """過去に使われた通貨ペア名の一覧(表記ゆれ防止のための選択候補用)"""
