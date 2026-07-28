@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import Hypothesis, Trade
+from app.services.stats_calculator import _return_pct
 
 router = APIRouter(prefix="/api/hypotheses", tags=["hypotheses"])
 
@@ -50,12 +51,14 @@ def _verify(db: Session, hypothesis: Hypothesis) -> dict:
 
     def _summarize(trades):
         if not trades:
-            return {"trade_count": 0, "win_rate": None, "expectancy": None, "total_profit_loss": None}
+            return {"trade_count": 0, "win_rate": None, "expectancy_pct": None, "expectancy": None, "total_profit_loss": None}
         wins = [t for t in trades if t.profit_loss > 0]
         total = sum(t.profit_loss for t in trades)
+        pct_values = [v for v in (_return_pct(t) for t in trades) if v is not None]
         return {
             "trade_count": len(trades),
             "win_rate": round(len(wins) / len(trades) * 100, 2),
+            "expectancy_pct": round(sum(pct_values) / len(pct_values), 3) if pct_values else None,
             "expectancy": round(total / len(trades), 2),
             "total_profit_loss": round(total, 2),
         }

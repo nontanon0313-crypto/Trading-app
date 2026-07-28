@@ -627,7 +627,7 @@ async function loadStatistics() {
       <div class="stat-box"><div class="num">${stats.max_drawdown ?? "-"}</div><div class="lbl">最大ドローダウン</div></div>
       <div class="stat-box"><div class="num">${stats.max_winning_streak}</div><div class="lbl">最大連勝</div></div>
       <div class="stat-box"><div class="num">${stats.max_losing_streak}</div><div class="lbl">最大連敗</div></div>
-      <div class="stat-box"><div class="num">${stats.expectancy ?? "-"}</div><div class="lbl">期待値(1トレード平均)</div></div>
+      <div class="stat-box"><div class="num">${stats.expectancy_pct != null ? stats.expectancy_pct + "%" : "-"}</div><div class="lbl">期待値(価格変動率%)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.precommit_rate)}</div><div class="lbl">事前記録率</div></div>
       <div class="stat-box"><div class="num">${stats.average_holding_minutes ?? "-"}</div><div class="lbl">平均保有時間(分)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.rule_adherence_rate)}</div><div class="lbl">ルール遵守率</div></div>
@@ -641,7 +641,7 @@ async function loadStatistics() {
         ${entries.map(([k, s]) => `
           <div class="list-item">
             <div class="top-row"><span class="pair">${k}</span><span>${fmtPct(s.win_rate)}</span></div>
-            <div class="meta">${s.trade_count}件 ・ 損益合計 ${s.total_profit_loss} ・ 期待値 ${s.expectancy}</div>
+            <div class="meta">${s.trade_count}件 ・ 損益合計 ${s.total_profit_loss} ・ 期待値 ${s.expectancy_pct != null ? s.expectancy_pct + "%" : "-"}</div>
           </div>
         `).join("")}
       `;
@@ -872,11 +872,11 @@ async function loadHypotheses() {
           <div class="meta">対象タグ: ${h.tags.map(escapeHtml).join(" / ")}</div>
           <div class="reason-block">
             <span class="k">登録後のみ(検証用) - ${formatDate(h.created_at)}以降</span>
-            ${sr.trade_count}件 ・ 勝率 ${fmtPct(sr.win_rate)} ・ 期待値 ${sr.expectancy ?? "-"}
+            ${sr.trade_count}件 ・ 勝率 ${fmtPct(sr.win_rate)} ・ 期待値 ${sr.expectancy_pct != null ? sr.expectancy_pct + "%" : "-"}
           </div>
           <div class="reason-block">
             <span class="k">全期間(参考・後付け含む)</span>
-            ${ref.trade_count}件 ・ 勝率 ${fmtPct(ref.win_rate)} ・ 期待値 ${ref.expectancy ?? "-"}
+            ${ref.trade_count}件 ・ 勝率 ${fmtPct(ref.win_rate)} ・ 期待値 ${ref.expectancy_pct != null ? ref.expectancy_pct + "%" : "-"}
           </div>
         </div>
       `;

@@ -1,10 +1,22 @@
 """
 トレード統計(勝率・PF・期待値・最大DD・各種内訳など)を計算するモジュール
+
+期待値は、ロットサイズの影響を受けない「価格変動率(%)ベース」を主指標とする。
+ロットは毎回変動するため、金額ベースの平均損益は条件同士の比較に使えないため。
 """
 import json as _json
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 from app.db.models import Trade
+
+
+def _return_pct(t: Trade) -> Optional[float]:
+    """ロットサイズに依存しない、価格変動率(%)ベースの損益を計算する。
+    符号は実際の損益(profit_loss)の符号に合わせる(side表記の誤りに影響されないため)。"""
+    if t.entry_price is None or t.exit_price is None or t.profit_loss is None or t.entry_price == 0:
+        return None
+    pct = abs(t.exit_price - t.entry_price) / abs(t.entry_price) * 100
+    return pct if t.profit_loss >= 0 else -pct
 
 
 def calculate_statistics(trades: List[Trade]) -> dict:
@@ -26,8 +38,12 @@ def calculate_statistics(trades: List[Trade]) -> dict:
     avg_loss = (total_loss / len(losses)) if losses else 0
     avg_rr = (avg_win / avg_loss) if avg_loss > 0 else None
 
-    # 期待値 = 1トレードあたりの平均損益(勝率だけでなく損益の大きさも反映する指標)
+    # 期待値(金額ベース、参考値。ロットが変動するため条件間の比較には不適切)
     expectancy = sum(t.profit_loss for t in closed_trades) / len(closed_trades)
+
+    # 期待値(価格変動率%ベース、主指標。ロットサイズの影響を受けない)
+    pct_values = [v for v in (_return_pct(t) for t in closed_trades) if v is not None]
+    expectancy_pct = round(sum(pct_values) / len(pct_values), 3) if pct_values else None
 
     max_drawdown = _calculate_max_drawdown(closed_trades)
     max_losing_streak = _calculate_max_streak(closed_trades, winning=False)
@@ -60,6 +76,7 @@ def calculate_statistics(trades: List[Trade]) -> dict:
         "total_trades": len(closed_trades),
         "win_rate": round(win_rate, 2),
         "profit_factor": round(profit_factor, 2) if profit_factor else None,
+        "expectancy_pct": expectancy_pct,
         "expectancy": round(expectancy, 2),
         "average_win": round(avg_win, 2),
         "average_loss": round(avg_loss, 2),
@@ -104,6 +121,7 @@ def _empty_stats() -> dict:
         "total_trades": 0,
         "win_rate": None,
         "profit_factor": None,
+        "expectancy_pct": None,
         "expectancy": None,
         "average_win": None,
         "average_loss": None,
@@ -176,7 +194,6 @@ def _rule_adherence_rate(trades: List[Trade]):
 
 
 def _precommit_rate(trades: List[Trade]):
-    """エントリー理由等が、決済前(結果を知る前)に記録されていた割合"""
     judged = [t for t in trades if t.journal_pre_committed_at and t.exit_datetime]
     if not judged:
         return None
@@ -194,10 +211,12 @@ def _group_stats(trades: List[Trade], key) -> dict:
         wins = [t for t in group_trades if t.profit_loss > 0]
         n = len(group_trades)
         total_pl = sum(t.profit_loss for t in group_trades)
+        pct_values = [v for v in (_return_pct(t) for t in group_trades) if v is not None]
         result[str(group_key)] = {
             "trade_count": n,
             "win_rate": round(len(wins) / n * 100, 2),
             "total_profit_loss": round(total_pl, 2),
+            "expectancy_pct": round(sum(pct_values) / len(pct_values), 3) if pct_values else None,
             "expectancy": round(total_pl / n, 2),
         }
     return result
@@ -215,10 +234,12 @@ def _group_stats_multi(trades: List[Trade], tags_fn) -> dict:
         wins = [t for t in group_trades if t.profit_loss > 0]
         n = len(group_trades)
         total_pl = sum(t.profit_loss for t in group_trades)
+        pct_values = [v for v in (_return_pct(t) for t in group_trades) if v is not None]
         result[tag] = {
             "trade_count": n,
             "win_rate": round(len(wins) / n * 100, 2),
             "total_profit_loss": round(total_pl, 2),
+            "expectancy_pct": round(sum(pct_values) / len(pct_values), 3) if pct_values else None,
             "expectancy": round(total_pl / n, 2),
         }
     return result
