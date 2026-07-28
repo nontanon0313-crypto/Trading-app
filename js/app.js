@@ -457,6 +457,8 @@ async function openJournalModal(tradeId) {
     document.getElementById("editExitPrice").value = trade.exit_price ?? "";
     document.getElementById("editProfitLoss").value = trade.profit_loss ?? "";
     document.getElementById("editLotSize").value = trade.lot_size ?? "";
+    document.getElementById("editEntryDatetime").value = toDatetimeLocalValue(trade.entry_datetime);
+    document.getElementById("editExitDatetime").value = toDatetimeLocalValue(trade.exit_datetime);
 
     selectedTags = new Set(Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags : []);
     ruleTagLibrary = await Api.getRuleTagLibrary().catch(() => ({}));
@@ -516,6 +518,14 @@ document.getElementById("quoteAnalysisBtn").addEventListener("click", () => {
   if (linkedAnalysisData.trend) journalForm.elements["journal_scenario"].value = linkedAnalysisData.trend;
 });
 
+function toDatetimeLocalValue(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 document.getElementById("saveTradeInfoBtn").addEventListener("click", async () => {
   try {
     if (!currentJournalTradeId) { alert("トレードが選択されていません"); return; }
@@ -531,6 +541,8 @@ document.getElementById("saveTradeInfoBtn").addEventListener("click", async () =
       exit_price: val("editExitPrice") != null ? parseFloat(val("editExitPrice")) : null,
       profit_loss: val("editProfitLoss") != null ? parseFloat(val("editProfitLoss")) : null,
       lot_size: val("editLotSize") != null ? parseFloat(val("editLotSize")) : null,
+      entry_datetime: val("editEntryDatetime") != null ? new Date(val("editEntryDatetime")).toISOString() : null,
+      exit_datetime: val("editExitDatetime") != null ? new Date(val("editExitDatetime")).toISOString() : null,
     };
     // nullのキーは送らない(未入力のまま上書きしてしまうのを防ぐ)
     Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
