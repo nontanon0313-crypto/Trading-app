@@ -57,16 +57,29 @@ const Api = {
     return res.json();
   },
 
-  async createTradesFromImage(file) {
+  async previewTradesFromImage(file) {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE}/api/trades/from-image`, {
+    const res = await fetch(`${API_BASE}/api/trades/from-image/preview`, {
       method: "POST",
       body: formData,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "画像からの読み取りに失敗しました");
+    }
+    return res.json();
+  },
+
+  async confirmTradesFromImage(items) {
+    const res = await fetch(`${API_BASE}/api/trades/from-image/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "取り込みの確定に失敗しました");
     }
     return res.json();
   },

@@ -69,12 +69,12 @@ def create_trade(trade_in: TradeCreate, db: Session = Depends(get_db)):
     return trade
 
 
-@router.post("/from-image")
-async def create_trades_from_image(
+@router.post("/from-image/preview")
+async def preview_trades_from_image(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """GMOクリック証券などの約定履歴スクリーンショットを読み取り、トレード記録として一括登録する"""
+    """GMOクリック証券などの約定履歴スクリーンショットを読み取り、取り込み候補を提示する(まだ保存しない)"""
     image_bytes, media_type = await validate_and_read_image(file)
 
     try:
@@ -87,36 +87,69 @@ async def create_trades_from_image(
 
     paired = pair_trade_rows(rows)
 
-    created = []
-    matched = []
+    items = []
     skipped = 0
     for t in paired:
         if t.get("entry_price") is None:
             skipped += 1
             continue
 
-        existing = _find_matching_open_trade(db, t)
-        if existing:
-            existing.exit_price = t.get("exit_price")
-            existing.profit_loss = t.get("profit_loss")
-            existing.exit_datetime = _parse_dt(t.get("exit_datetime"))
-            if not existing.lot_size and t.get("lot_size"):
-                existing.lot_size = t.get("lot_size")
-            matched.append(existing)
-            continue
+        candidates = _find_candidate_open_trades(db, t)
+        items.append({
+            **t,
+            "suggested_trade_id": candidates[0]["id"] if candidates else None,
+            "candidates": candidates,
+        })
 
-        trade = Trade(
-            currency_pair=t.get("currency_pair"),
-            side=t.get("side"),
-            entry_price=t.get("entry_price"),
-            exit_price=t.get("exit_price"),
-            profit_loss=t.get("profit_loss"),
-            lot_size=t.get("lot_size"),
-            entry_datetime=_parse_dt(t.get("entry_datetime")),
-            exit_datetime=_parse_dt(t.get("exit_datetime")),
-        )
-        db.add(trade)
-        created.append(trade)
+    return {"items": items, "skipped_count": skipped}
+
+
+class ImportItem(BaseModel):
+    trade_id: Optional[int] = None  # 指定があれば既存トレードを更新、無ければ新規作成
+    currency_pair: str
+    side: Optional[str] = None
+    entry_price: float
+    exit_price: Optional[float] = None
+    profit_loss: Optional[float] = None
+    lot_size: Optional[float] = None
+    entry_datetime: Optional[datetime] = None
+    exit_datetime: Optional[datetime] = None
+
+
+class ImportConfirmRequest(BaseModel):
+    items: List[ImportItem]
+
+
+@router.post("/from-image/confirm")
+def confirm_trades_from_image(body: ImportConfirmRequest, db: Session = Depends(get_db)):
+    """プレビューをユーザーが確認・修正した内容で、実際にトレード記録へ反映する"""
+    created = []
+    matched = []
+
+    for item in body.items:
+        if item.trade_id:
+            trade = db.query(Trade).filter(Trade.id == item.trade_id).first()
+            if not trade:
+                continue
+            trade.exit_price = item.exit_price
+            trade.profit_loss = item.profit_loss
+            trade.exit_datetime = item.exit_datetime
+            if not trade.lot_size and item.lot_size:
+                trade.lot_size = item.lot_size
+            matched.append(trade)
+        else:
+            trade = Trade(
+                currency_pair=item.currency_pair,
+                side=item.side,
+                entry_price=item.entry_price,
+                exit_price=item.exit_price,
+                profit_loss=item.profit_loss,
+                lot_size=item.lot_size,
+                entry_datetime=item.entry_datetime,
+                exit_datetime=item.exit_datetime,
+            )
+            db.add(trade)
+            created.append(trade)
 
     db.commit()
     for t in created + matched:
@@ -125,19 +158,16 @@ async def create_trades_from_image(
     return {
         "created_count": len(created),
         "matched_count": len(matched),
-        "skipped_count": skipped,
         "trades": created + matched,
     }
 
 
-def _find_matching_open_trade(db: Session, row: dict):
-    """事前記録された未決済トレード(exit_price未設定)の中から、
-    同じ通貨ペア・同じ方向でもっとも古く記録されたものを対応させる(FIFO)。
-    約定履歴は画像の下(古い順)から読み込まれ、事前記録も古い順に対応する運用を想定。"""
+def _find_candidate_open_trades(db: Session, row: dict) -> list:
+    """同じ通貨ペア・方向の未決済トレードを、古い順(FIFO推奨順)で候補として返す"""
     currency_pair = row.get("currency_pair")
     side = row.get("side")
     if not currency_pair:
-        return None
+        return []
 
     candidates = db.query(Trade).filter(
         Trade.currency_pair == currency_pair,
@@ -147,11 +177,17 @@ def _find_matching_open_trade(db: Session, row: dict):
     if side:
         candidates = [c for c in candidates if not c.side or c.side == side]
 
-    if not candidates:
-        return None
-
     candidates.sort(key=lambda c: c.entry_datetime or c.created_at)
-    return candidates[0]
+
+    return [
+        {
+            "id": c.id,
+            "entry_price": c.entry_price,
+            "entry_datetime": c.entry_datetime,
+            "journal_entry_reason": c.journal_entry_reason,
+        }
+        for c in candidates
+    ]
 
 
 class TradeUpdate(BaseModel):

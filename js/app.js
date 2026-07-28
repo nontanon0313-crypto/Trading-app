@@ -258,26 +258,97 @@ tradeImageInput.addEventListener("change", () => {
   tradeImportResult.hidden = true;
 });
 
+let previewItems = [];
+
 tradeAnalyzeBtn.addEventListener("click", async () => {
   if (!selectedTradeImage) return;
   tradeAnalyzeBtn.disabled = true;
   tradeAnalyzeBtn.textContent = "読み取り中...";
   try {
-    const result = await Api.createTradesFromImage(selectedTradeImage);
-    tradeImportResult.hidden = false;
-    tradeImportResult.innerHTML = `
-      <div class="reason-block">
-        <span class="k">結果</span>
-        ${result.created_count}件の記録を追加しました${result.skipped_count ? `(${result.skipped_count}件は情報不足のためスキップ)` : ""}
-      </div>
-    `;
-    loadTrades();
+    const result = await Api.previewTradesFromImage(selectedTradeImage);
+    previewItems = result.items || [];
+    renderImportPreview(result.skipped_count);
   } catch (e) {
     tradeImportResult.hidden = false;
     tradeImportResult.innerHTML = `<div class="reason-block">${escapeHtml(e.message)}</div>`;
   } finally {
     tradeAnalyzeBtn.disabled = false;
     tradeAnalyzeBtn.textContent = "この画像から記録を読み取る";
+  }
+});
+
+function renderImportPreview(skippedCount) {
+  const previewBox = document.getElementById("tradeImportPreview");
+  const list = document.getElementById("tradeImportPreviewList");
+
+  if (!previewItems.length) {
+    tradeImportResult.hidden = false;
+    tradeImportResult.innerHTML = `<div class="reason-block">取り込める決済データが見つかりませんでした${skippedCount ? `(${skippedCount}件は情報不足のためスキップ)` : ""}</div>`;
+    previewBox.hidden = true;
+    return;
+  }
+
+  list.innerHTML = previewItems.map((item, idx) => {
+    const options = [`<option value="new">新規作成として登録</option>`]
+      .concat((item.candidates || []).map(c => {
+        const label = `#${c.id}: ${fmt(c.entry_price)} ・ ${formatDate(c.entry_datetime)}${c.journal_entry_reason ? " ・ " + c.journal_entry_reason.slice(0, 20) : ""}`;
+        const selected = item.suggested_trade_id === c.id ? "selected" : "";
+        return `<option value="${c.id}" ${selected}>${escapeHtml(label)}に対応させる</option>`;
+      }))
+      .join("");
+    return `
+      <div class="list-item">
+        <div class="top-row">
+          <span class="pair">${item.currency_pair || "-"}</span>
+          <span class="pl ${item.profit_loss > 0 ? "pos" : "neg"}">${item.profit_loss != null ? (item.profit_loss > 0 ? "+" : "") + item.profit_loss : "-"}</span>
+        </div>
+        <div class="meta">${fmt(item.entry_price)} → ${fmt(item.exit_price)} ・ ${formatDate(item.exit_datetime)}</div>
+        <select class="preview-match-select" data-idx="${idx}">${options}</select>
+      </div>
+    `;
+  }).join("");
+
+  if (skippedCount) {
+    list.innerHTML += `<div class="empty-state">${skippedCount}件は情報不足のためスキップされます</div>`;
+  }
+
+  previewBox.hidden = false;
+  tradeImportResult.hidden = true;
+}
+
+document.getElementById("confirmImportBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("confirmImportBtn");
+  const selects = document.querySelectorAll(".preview-match-select");
+  const items = Array.from(selects).map(sel => {
+    const item = previewItems[parseInt(sel.dataset.idx, 10)];
+    const chosen = sel.value;
+    return {
+      trade_id: chosen === "new" ? null : parseInt(chosen, 10),
+      currency_pair: item.currency_pair,
+      side: item.side,
+      entry_price: item.entry_price,
+      exit_price: item.exit_price,
+      profit_loss: item.profit_loss,
+      lot_size: item.lot_size,
+      entry_datetime: item.entry_datetime,
+      exit_datetime: item.exit_datetime,
+    };
+  });
+
+  btn.disabled = true;
+  btn.textContent = "取り込み中...";
+  try {
+    const result = await Api.confirmTradesFromImage(items);
+    document.getElementById("tradeImportPreview").hidden = true;
+    tradeImportResult.hidden = false;
+    tradeImportResult.innerHTML = `<div class="reason-block"><span class="k">結果</span>新規${result.created_count}件・紐付け${result.matched_count}件を反映しました</div>`;
+    previewItems = [];
+    loadTrades();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "この内容で取り込みを確定する";
   }
 });
 
