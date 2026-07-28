@@ -29,8 +29,8 @@ FALLBACK_MODEL_NAME = "gemini-3.1-flash-lite"
 
 
 def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
-    """Geminiにリクエストを送る。クォータ超過(429)時は自動でフォールバックモデルに切り替える。
-    応答が遅い場合に無限に固まらないよう、タイムアウトを設定する。"""
+    """Geminiにリクエストを送る。クォータ超過やタイムアウトが起きた場合、
+    別枠のクォータを持つフォールバックモデルで自動的に再試行する。"""
     _ensure_configured()
     last_error = None
 
@@ -40,15 +40,13 @@ def _generate(system_instruction: str, contents, max_output_tokens: int) -> str:
             response = model.generate_content(
                 contents,
                 generation_config={"max_output_tokens": max_output_tokens},
-                request_options={"timeout": 55},
+                request_options={"timeout": 50},
             )
             return response.text
         except Exception as e:
             last_error = e
-            error_text = str(e)
-            is_quota_error = "429" in error_text or "quota" in error_text.lower() or "RESOURCE_EXHAUSTED" in error_text
-            if is_quota_error and model_name == MODEL_NAME:
-                # メインモデルの無料枠上限。別枠のフォールバックモデルで再試行する
+            if model_name == MODEL_NAME:
+                # クォータ超過・タイムアウトなど理由を問わず、フォールバックモデルで一度は再試行する
                 time.sleep(1)
                 continue
             raise
@@ -279,7 +277,7 @@ def analyze_chart_image(images: list, rule_tags: list = None, entry_timeframe: s
         contents.append({"mime_type": img["media_type"], "data": img["bytes"]})
     contents.append("これらのチャート画像を分析してください。")
 
-    raw_text = _generate(system_prompt, contents, max_output_tokens=8192)
+    raw_text = _generate(system_prompt, contents, max_output_tokens=6144)
     json_str = _extract_json_object(raw_text.strip())
     try:
         parsed = json.loads(json_str)

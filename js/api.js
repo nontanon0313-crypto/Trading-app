@@ -17,7 +17,7 @@ const Api = {
       formData.append("timeframes", s.timeframe);
     });
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 65000);
+    const timeoutId = setTimeout(() => controller.abort(), 130000);
     let res;
     try {
       res = await fetch(`${API_BASE}/api/chart-analysis/`, {
