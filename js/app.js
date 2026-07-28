@@ -368,7 +368,7 @@ async function loadTrades() {
       return `
         <div class="list-item">
           <div class="top-row">
-            <span class="pair">${t.currency_pair}${hasJournal ? " 📝" : ""}${isOpen ? ' <span class="direction-badge skip">保有中</span>' : ""}</span>
+            <span class="pair">#${t.id} ${t.currency_pair}${hasJournal ? " 📝" : ""}${isOpen ? ' <span class="direction-badge skip">保有中</span>' : ""}</span>
             <span class="pl ${plClass}">${pl != null ? (pl > 0 ? "+" : "") + pl : "-"}</span>
           </div>
           <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)} ・ ${formatDate(t.entry_datetime)}</div>
@@ -448,6 +448,7 @@ async function openJournalModal(tradeId) {
       const field = journalForm.elements[key];
       if (field && trade[key] != null) field.value = trade[key];
     });
+    document.getElementById("journalModalTitle").textContent = `トレード日記 #${trade.id}`;
     document.getElementById("tradeReviewResult").hidden = true;
 
     document.getElementById("editCurrencyPair").value = trade.currency_pair || "";
