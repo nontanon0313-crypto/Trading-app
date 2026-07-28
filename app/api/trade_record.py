@@ -87,18 +87,27 @@ async def preview_trades_from_image(
 
     paired = pair_trade_rows(rows)
 
-    items = []
-    skipped = 0
-    for t in paired:
-        if t.get("entry_price") is None:
-            skipped += 1
-            continue
+    # 決済日時の古い順に並べ、バッチ内で候補が重複しないよう順番に割り当てる
+    paired_with_price = [t for t in paired if t.get("entry_price") is not None]
+    skipped = len(paired) - len(paired_with_price)
+    paired_with_price.sort(key=lambda t: t.get("exit_datetime") or "")
 
-        candidates = _find_candidate_open_trades(db, t)
+    candidate_pools = {}  # (currency_pair, side) -> 候補リスト(古い順、消費される)
+    items = []
+    for t in paired_with_price:
+        key = (t.get("currency_pair"), t.get("side"))
+        if key not in candidate_pools:
+            candidate_pools[key] = _find_candidate_open_trades(db, t)
+
+        full_candidates = candidate_pools[key]
+        # このバッチ内ですでに他の行に割り当て済みの候補は、提案先から除外する
+        already_assigned_ids = {it["suggested_trade_id"] for it in items if it["suggested_trade_id"]}
+        remaining = [c for c in full_candidates if c["id"] not in already_assigned_ids]
+
         items.append({
             **t,
-            "suggested_trade_id": candidates[0]["id"] if candidates else None,
-            "candidates": candidates,
+            "suggested_trade_id": remaining[0]["id"] if remaining else None,
+            "candidates": full_candidates,
         })
 
     return {"items": items, "skipped_count": skipped}
