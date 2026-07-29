@@ -189,6 +189,17 @@
     <div id="hypothesisList" class="list"></div>
 
     <button class="btn btn-danger" id="clearDataBtn">全データを削除する</button>
+
+    <h2 class="section-title">銘柄別レバレッジ設定</h2>
+    <p class="lede">未登録の銘柄はデフォルト(<span id="defaultLeverageLabel">-</span>倍)で計算されます。</p>
+    <form class="card form-card" id="leverageForm">
+      <div class="field-row">
+        <div class="field"><label>銘柄</label><input type="text" id="leverageCurrencyPair" placeholder="例: 銀スポット" required></div>
+        <div class="field"><label>レバレッジ(倍)</label><input type="number" step="1" id="leverageValue" required></div>
+      </div>
+      <button type="submit" class="btn btn-primary">登録・更新する</button>
+    </form>
+    <div id="leverageList" class="list"></div>
   </section>
 
 </main>

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import Trade
 from app.services.stats_calculator import calculate_statistics, calculate_daily_calendar
+from app.api.leverages import get_leverage_map
 
 router = APIRouter(prefix="/api/statistics", tags=["statistics"])
 
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/api/statistics", tags=["statistics"])
 def get_statistics(db: Session = Depends(get_db)):
     """蓄積された全トレードから統計指標を計算して返す"""
     trades = db.query(Trade).all()
-    return calculate_statistics(trades)
+    return calculate_statistics(trades, leverage_map=get_leverage_map(db))
 
 
 @router.get("/calendar")

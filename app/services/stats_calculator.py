@@ -1,29 +1,38 @@
 """
 トレード統計(勝率・PF・期待値・最大DD・各種内訳など)を計算するモジュール
 
-期待値は、ロットサイズの影響を受けない「価格変動率(%)ベース」を主指標とする。
+期待値は「証拠金対比リターン(%)・レバレッジ込み」を主指標とする。
 ロットは毎回変動するため、金額ベースの平均損益は条件同士の比較に使えないため。
+レバレッジは銘柄(通貨ペア)ごとに異なるため、leverage_map(通貨ペア→レバレッジ)を
+外部から渡せるようにしている。渡されなければ、環境変数のデフォルト値を使う。
 """
 import json as _json
 from collections import defaultdict
-from typing import List, Optional
+from typing import List, Optional, Dict
 from app.db.models import Trade
 from app.core.config import settings
 
 
-def _return_pct(t: Trade) -> Optional[float]:
+def _leverage_for(t: Trade, leverage_map: Optional[Dict[str, float]]) -> float:
+    if leverage_map and t.currency_pair in leverage_map:
+        return leverage_map[t.currency_pair]
+    return settings.LEVERAGE
+
+
+def _return_pct(t: Trade, leverage_map: Optional[Dict[str, float]] = None) -> Optional[float]:
     """証拠金に対するリターン率(%)を計算する。
-    価格変動率にレバレッジを掛けることで、ロットサイズに依存せず、
-    実際にフルレバで張った場合の資金効率を反映した値になる。
+    価格変動率に、銘柄ごとのレバレッジ(未登録ならデフォルト値)を掛けることで、
+    ロットサイズに依存せず、実際にフルレバで張った場合の資金効率を反映した値になる。
     符号は実際の損益(profit_loss)の符号に合わせる(side表記の誤りに影響されないため)。"""
     if t.entry_price is None or t.exit_price is None or t.profit_loss is None or t.entry_price == 0:
         return None
     price_move_pct = abs(t.exit_price - t.entry_price) / abs(t.entry_price) * 100
-    leveraged_pct = price_move_pct * settings.LEVERAGE
+    leverage = _leverage_for(t, leverage_map)
+    leveraged_pct = price_move_pct * leverage
     return leveraged_pct if t.profit_loss >= 0 else -leveraged_pct
 
 
-def calculate_statistics(trades: List[Trade]) -> dict:
+def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, float]] = None) -> dict:
     """トレード一覧から各種統計指標を算出する"""
     closed_trades = [t for t in trades if t.profit_loss is not None]
 
@@ -45,32 +54,35 @@ def calculate_statistics(trades: List[Trade]) -> dict:
     # 期待値(金額ベース、参考値。ロットが変動するため条件間の比較には不適切)
     expectancy = sum(t.profit_loss for t in closed_trades) / len(closed_trades)
 
-    # 期待値(価格変動率%ベース、主指標。ロットサイズの影響を受けない)
-    pct_values = [v for v in (_return_pct(t) for t in closed_trades) if v is not None]
+    # 期待値(証拠金対比%ベース・レバレッジ込み、主指標)
+    pct_values = [v for v in (_return_pct(t, leverage_map) for t in closed_trades) if v is not None]
     expectancy_pct = round(sum(pct_values) / len(pct_values), 3) if pct_values else None
 
     max_drawdown = _calculate_max_drawdown(closed_trades)
     max_losing_streak = _calculate_max_streak(closed_trades, winning=False)
     max_winning_streak = _calculate_max_streak(closed_trades, winning=True)
 
-    by_currency = _group_stats(closed_trades, key=lambda t: t.currency_pair)
+    by_currency = _group_stats(closed_trades, key=lambda t: t.currency_pair, leverage_map=leverage_map)
     by_hour = _group_stats(
         closed_trades,
         key=lambda t: t.entry_datetime.hour if t.entry_datetime else "unknown",
+        leverage_map=leverage_map,
     )
     by_weekday = _group_stats(
         closed_trades,
         key=lambda t: t.entry_datetime.strftime("%A") if t.entry_datetime else "unknown",
+        leverage_map=leverage_map,
     )
-    by_side = _group_stats(closed_trades, key=lambda t: _side_label(t.side))
-    by_entry_reason = _group_stats(closed_trades, key=lambda t: t.journal_entry_reason or "未入力")
-    by_exit_reason = _group_stats(closed_trades, key=lambda t: t.journal_exit_reason or "未入力")
-    by_emotion = _group_stats(closed_trades, key=lambda t: t.journal_emotion or "未入力")
+    by_side = _group_stats(closed_trades, key=lambda t: _side_label(t.side), leverage_map=leverage_map)
+    by_entry_reason = _group_stats(closed_trades, key=lambda t: t.journal_entry_reason or "未入力", leverage_map=leverage_map)
+    by_exit_reason = _group_stats(closed_trades, key=lambda t: t.journal_exit_reason or "未入力", leverage_map=leverage_map)
+    by_emotion = _group_stats(closed_trades, key=lambda t: t.journal_emotion or "未入力", leverage_map=leverage_map)
     by_confidence = _group_stats(
         closed_trades,
         key=lambda t: t.journal_confidence if t.journal_confidence is not None else "未入力",
+        leverage_map=leverage_map,
     )
-    by_rule_tag = _group_stats_multi(closed_trades, tags_fn=_extract_tags)
+    by_rule_tag = _group_stats_multi(closed_trades, tags_fn=_extract_tags, leverage_map=leverage_map)
 
     avg_holding_minutes = _average_holding_time(closed_trades)
     rule_adherence_rate = _rule_adherence_rate(closed_trades)
@@ -205,7 +217,7 @@ def _precommit_rate(trades: List[Trade]):
     return round(len(precommitted) / len(judged) * 100, 2)
 
 
-def _group_stats(trades: List[Trade], key) -> dict:
+def _group_stats(trades: List[Trade], key, leverage_map: Optional[Dict[str, float]] = None) -> dict:
     groups = defaultdict(list)
     for t in trades:
         groups[key(t)].append(t)
@@ -215,7 +227,7 @@ def _group_stats(trades: List[Trade], key) -> dict:
         wins = [t for t in group_trades if t.profit_loss > 0]
         n = len(group_trades)
         total_pl = sum(t.profit_loss for t in group_trades)
-        pct_values = [v for v in (_return_pct(t) for t in group_trades) if v is not None]
+        pct_values = [v for v in (_return_pct(t, leverage_map) for t in group_trades) if v is not None]
         result[str(group_key)] = {
             "trade_count": n,
             "win_rate": round(len(wins) / n * 100, 2),
@@ -226,7 +238,7 @@ def _group_stats(trades: List[Trade], key) -> dict:
     return result
 
 
-def _group_stats_multi(trades: List[Trade], tags_fn) -> dict:
+def _group_stats_multi(trades: List[Trade], tags_fn, leverage_map: Optional[Dict[str, float]] = None) -> dict:
     """1トレードが複数タグを持つ場合、各タグの集合ごとに集計する(重複所属あり)"""
     groups = defaultdict(list)
     for t in trades:
@@ -238,7 +250,7 @@ def _group_stats_multi(trades: List[Trade], tags_fn) -> dict:
         wins = [t for t in group_trades if t.profit_loss > 0]
         n = len(group_trades)
         total_pl = sum(t.profit_loss for t in group_trades)
-        pct_values = [v for v in (_return_pct(t) for t in group_trades) if v is not None]
+        pct_values = [v for v in (_return_pct(t, leverage_map) for t in group_trades) if v is not None]
         result[tag] = {
             "trade_count": n,
             "win_rate": round(len(wins) / n * 100, 2),

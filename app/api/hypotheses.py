@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import Hypothesis, Trade
 from app.services.stats_calculator import _return_pct
+from app.api.leverages import get_leverage_map
 
 router = APIRouter(prefix="/api/hypotheses", tags=["hypotheses"])
 
@@ -49,12 +50,14 @@ def _verify(db: Session, hypothesis: Hypothesis) -> dict:
         if t.entry_datetime and t.entry_datetime > hypothesis.created_at
     ]
 
+    leverage_map = get_leverage_map(db)
+
     def _summarize(trades):
         if not trades:
             return {"trade_count": 0, "win_rate": None, "expectancy_pct": None, "expectancy": None, "total_profit_loss": None}
         wins = [t for t in trades if t.profit_loss > 0]
         total = sum(t.profit_loss for t in trades)
-        pct_values = [v for v in (_return_pct(t) for t in trades) if v is not None]
+        pct_values = [v for v in (_return_pct(t, leverage_map) for t in trades) if v is not None]
         return {
             "trade_count": len(trades),
             "win_rate": round(len(wins) / len(trades) * 100, 2),

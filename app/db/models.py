@@ -130,6 +130,16 @@ class Hypothesis(Base):
     notes = Column(Text, nullable=True)             # メモ
 
 
+class InstrumentLeverage(Base):
+    """銘柄(通貨ペア)ごとのレバレッジ設定。未登録の銘柄はデフォルト値を使う。"""
+    __tablename__ = "instrument_leverages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    currency_pair = Column(String, unique=True, nullable=False)
+    leverage = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class RuleTag(Base):
     """事前記録で使う取引ルールタグのマスタ(カテゴリ別・編集可能)"""
     __tablename__ = "rule_tags"

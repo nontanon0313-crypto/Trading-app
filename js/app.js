@@ -6,7 +6,7 @@ function switchView(name) {
   views.forEach(v => v.hidden = v.dataset.view !== name);
   tabs.forEach(t => t.classList.toggle("active", t.dataset.view === name));
   if (name === "trades") loadTrades();
-  if (name === "stats") { loadStatistics(); loadCalendar(); loadHypotheses(); }
+  if (name === "stats") { loadStatistics(); loadCalendar(); loadHypotheses(); loadLeverages(); }
 }
 
 tabs.forEach(tab => {
@@ -911,6 +911,47 @@ async function loadHypotheses() {
     container.innerHTML = `<div class="empty-state">仮説一覧を取得できませんでした</div>`;
   }
 }
+
+// ---------- 銘柄別レバレッジ設定 ----------
+async function loadLeverages() {
+  const container = document.getElementById("leverageList");
+  try {
+    const data = await Api.getLeverages();
+    document.getElementById("defaultLeverageLabel").textContent = data.default_leverage ?? "-";
+    container.innerHTML = data.instruments.length
+      ? data.instruments.map(l => `
+          <div class="list-item">
+            <div class="top-row"><span class="pair">${escapeHtml(l.currency_pair)}</span><span>${l.leverage}倍</span></div>
+            <button class="tag-del-btn" data-id="${l.id}">削除</button>
+          </div>
+        `).join("")
+      : `<div class="empty-state">銘柄別の登録はまだありません(すべてデフォルト倍率が使われます)</div>`;
+    container.querySelectorAll(".tag-del-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await Api.deleteLeverage(btn.dataset.id);
+        loadLeverages();
+        loadStatistics();
+      });
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state">取得できませんでした</div>`;
+  }
+}
+
+document.getElementById("leverageForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pair = document.getElementById("leverageCurrencyPair").value.trim();
+  const lev = parseFloat(document.getElementById("leverageValue").value);
+  if (!pair || !lev) return;
+  try {
+    await Api.upsertLeverage(pair, lev);
+    e.target.reset();
+    loadLeverages();
+    loadStatistics();
+  } catch (err) {
+    alert(err.message);
+  }
+});
 
 document.getElementById("clearDataBtn").addEventListener("click", async () => {
   if (!confirm("すべてのデータ(分析履歴・トレード記録)を削除します。元に戻せません。よろしいですか?")) return;

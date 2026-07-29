@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import Trade
 from app.services.stats_calculator import calculate_statistics
+from app.api.leverages import get_leverage_map
 from app.services import claude_client
 
 router = APIRouter(prefix="/api/improvement", tags=["improvement"])
@@ -22,7 +23,7 @@ MILESTONES = [20, 50, 100, 150, 200, 300, 500]
 def get_improvement_suggestions(db: Session = Depends(get_db)):
     """統計データをもとにAIによる改善提案を生成する"""
     trades = db.query(Trade).all()
-    stats = calculate_statistics(trades)
+    stats = calculate_statistics(trades, leverage_map=get_leverage_map(db))
 
     if stats["total_trades"] == 0:
         raise HTTPException(
@@ -51,7 +52,7 @@ def get_milestone_status(db: Session = Depends(get_db)):
 async def get_milestone_analysis(db: Session = Depends(get_db)):
     """節目件数に達したトレードデータをもとに、統計的な節目分析を行う"""
     trades = db.query(Trade).filter(Trade.profit_loss.isnot(None)).all()
-    stats = calculate_statistics(trades)
+    stats = calculate_statistics(trades, leverage_map=get_leverage_map(db))
 
     if stats["total_trades"] < MILESTONES[0]:
         raise HTTPException(

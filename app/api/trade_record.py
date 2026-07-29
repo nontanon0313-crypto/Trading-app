@@ -223,7 +223,7 @@ def update_trade(trade_id: int, trade_in: TradeUpdate, db: Session = Depends(get
 
     db.commit()
     db.refresh(trade)
-    return _serialize_trade(trade)
+    return _serialize_trade(trade, db)
 
 
 @router.patch("/{trade_id}/link-analysis")
@@ -295,7 +295,7 @@ def get_trade(trade_id: int, db: Session = Depends(get_db)):
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
     if not trade:
         raise HTTPException(status_code=404, detail="トレード記録が見つかりません")
-    return _serialize_trade(trade)
+    return _serialize_trade(trade, db)
 
 
 @router.patch("/{trade_id}/journal")
@@ -320,13 +320,13 @@ def update_trade_journal(trade_id: int, journal_in: TradeJournalUpdate, db: Sess
 
     db.commit()
     db.refresh(trade)
-    return _serialize_trade(trade)
+    return _serialize_trade(trade, db)
 
 
 @router.get("/")
 def list_trades(db: Session = Depends(get_db), limit: int = 100):
     trades = db.query(Trade).order_by(Trade.created_at.desc()).limit(limit).all()
-    return [_serialize_trade(t) for t in trades]
+    return [_serialize_trade(t, db) for t in trades]
 
 
 @router.post("/{trade_id}/review")
@@ -394,9 +394,10 @@ async def review_trade(trade_id: int, db: Session = Depends(get_db)):
     return {"trade_id": trade.id, "review": review, "is_precommitted": is_precommitted}
 
 
-def _serialize_trade(trade: Trade) -> dict:
+def _serialize_trade(trade: Trade, db: Session = None) -> dict:
     """journal_rule_tagsをJSON配列としてデコードし、利益率(%)も付与して返す"""
     from app.services.stats_calculator import _return_pct
+    from app.api.leverages import get_leverage_map
 
     is_precommitted = bool(
         trade.journal_pre_committed_at and trade.exit_datetime
@@ -408,6 +409,7 @@ def _serialize_trade(trade: Trade) -> dict:
     except (ValueError, TypeError):
         data["journal_rule_tags"] = []
     data["is_precommitted"] = is_precommitted
-    return_pct = _return_pct(trade)
+    leverage_map = get_leverage_map(db) if db is not None else None
+    return_pct = _return_pct(trade, leverage_map)
     data["return_pct"] = round(return_pct, 3) if return_pct is not None else None
     return data

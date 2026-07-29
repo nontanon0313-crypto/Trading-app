@@ -106,6 +106,28 @@ const Api = {
     return res.json();
   },
 
+  async getLeverages() {
+    const res = await fetch(`${API_BASE}/api/leverages/`);
+    if (!res.ok) return { default_leverage: null, instruments: [] };
+    return res.json();
+  },
+
+  async upsertLeverage(currency_pair, leverage) {
+    const res = await fetch(`${API_BASE}/api/leverages/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currency_pair, leverage }),
+    });
+    if (!res.ok) throw new Error("レバレッジの登録に失敗しました");
+    return res.json();
+  },
+
+  async deleteLeverage(id) {
+    const res = await fetch(`${API_BASE}/api/leverages/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("削除に失敗しました");
+    return res.json();
+  },
+
   async getRuleTags() {
     const res = await fetch(`${API_BASE}/api/trades/rule-tags`);
     if (!res.ok) return [];
