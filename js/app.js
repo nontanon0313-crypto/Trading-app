@@ -641,7 +641,7 @@ async function loadStatistics() {
     grid.innerHTML = `
       <div class="stat-box"><div class="num">${stats.total_trades}</div><div class="lbl">総トレード数</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.win_rate)}</div><div class="lbl">勝率</div></div>
-      <div class="stat-box"><div class="num">${stats.profit_factor ?? "-"}</div><div class="lbl">プロフィットファクター</div></div>
+      <div class="stat-box"><div class="num">${stats.profit_factor ?? (stats.total_trades > 0 ? "∞(負けなし)" : "-")}</div><div class="lbl">プロフィットファクター</div></div>
       <div class="stat-box"><div class="num">${stats.max_drawdown ?? "-"}</div><div class="lbl">最大ドローダウン</div></div>
       <div class="stat-box"><div class="num">${stats.max_winning_streak}</div><div class="lbl">最大連勝</div></div>
       <div class="stat-box"><div class="num">${stats.max_losing_streak}</div><div class="lbl">最大連敗</div></div>

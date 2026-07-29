@@ -75,7 +75,7 @@ def calculate_statistics(trades: List[Trade]) -> dict:
     return {
         "total_trades": len(closed_trades),
         "win_rate": round(win_rate, 2),
-        "profit_factor": round(profit_factor, 2) if profit_factor else None,
+        "profit_factor": round(profit_factor, 2) if profit_factor is not None else None,
         "expectancy_pct": expectancy_pct,
         "expectancy": round(expectancy, 2),
         "average_win": round(avg_win, 2),
