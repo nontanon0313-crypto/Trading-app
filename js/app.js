@@ -219,7 +219,7 @@ document.getElementById("quickEntryForm").addEventListener("submit", async (e) =
     currency_pair: currencyPair,
     side: formData.get("side"),
     entry_price: parseFloat(formData.get("entry_price")),
-    entry_datetime: new Date().toISOString(),
+    entry_datetime: localNowString(),
   };
   const lot = formData.get("lot_size");
   if (lot) payload.lot_size = parseFloat(lot);
@@ -518,6 +518,12 @@ document.getElementById("quoteAnalysisBtn").addEventListener("click", () => {
   if (linkedAnalysisData.trend) journalForm.elements["journal_scenario"].value = linkedAnalysisData.trend;
 });
 
+function localNowString() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 function toDatetimeLocalValue(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -541,8 +547,8 @@ document.getElementById("saveTradeInfoBtn").addEventListener("click", async () =
       exit_price: val("editExitPrice") != null ? parseFloat(val("editExitPrice")) : null,
       profit_loss: val("editProfitLoss") != null ? parseFloat(val("editProfitLoss")) : null,
       lot_size: val("editLotSize") != null ? parseFloat(val("editLotSize")) : null,
-      entry_datetime: val("editEntryDatetime") != null ? new Date(val("editEntryDatetime")).toISOString() : null,
-      exit_datetime: val("editExitDatetime") != null ? new Date(val("editExitDatetime")).toISOString() : null,
+      entry_datetime: val("editEntryDatetime") != null ? val("editEntryDatetime") + ":00" : null,
+      exit_datetime: val("editExitDatetime") != null ? val("editExitDatetime") + ":00" : null,
     };
     // nullのキーは送らない(未入力のまま上書きしてしまうのを防ぐ)
     Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
