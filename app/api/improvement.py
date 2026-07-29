@@ -32,7 +32,9 @@ def get_improvement_suggestions(db: Session = Depends(get_db)):
         )
 
     try:
-        suggestions = claude_client.generate_improvement_suggestions(stats)
+        # ポジション方向は分析対象外のため、AIに渡す前に除外する
+        stats_for_ai = {k: v for k, v in stats.items() if k != "by_side"}
+        suggestions = claude_client.generate_improvement_suggestions(stats_for_ai)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI改善提案でエラーが発生しました: {e}")
 
@@ -72,7 +74,6 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
         )
         trades_summary.append({
             "currency_pair": t.currency_pair,
-            "side": t.side,
             "profit_loss": t.profit_loss,
             "entry_datetime": t.entry_datetime,
             "rule_tags": tags,
@@ -85,7 +86,9 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
         })
 
     try:
-        analysis = await asyncio.to_thread(claude_client.analyze_milestone, stats, trades_summary)
+        # ポジション方向は分析対象外のため、統計データからも除外してAIに渡す
+        stats_for_ai = {k: v for k, v in stats.items() if k != "by_side"}
+        analysis = await asyncio.to_thread(claude_client.analyze_milestone, stats_for_ai, trades_summary)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"節目分析でエラーが発生しました: {e}")
 
