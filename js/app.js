@@ -809,6 +809,7 @@ document.getElementById("milestoneBtn").addEventListener("click", async () => {
       line("勝率は高いが期待値が低い条件", "high_winrate_low_expectancy"),
       line("最も改善効果が高い課題", "top_improvement_priority"),
       line("信頼性についてのコメント", "reliability_note"),
+      line("単一要素の交絡チェック", "confounding_check"),
     ].join("");
   } catch (e) {
     result.hidden = false;
