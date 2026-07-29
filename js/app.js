@@ -371,7 +371,7 @@ async function loadTrades() {
             <span class="pair">#${t.id} ${t.currency_pair}${hasJournal ? " 📝" : ""}${isOpen ? ' <span class="direction-badge skip">保有中</span>' : ""}</span>
             <span class="pl ${plClass}">${pl != null ? (pl > 0 ? "+" : "") + pl : "-"}</span>
           </div>
-          <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)} ・ ${formatDate(t.entry_datetime)}</div>
+          <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)}${t.return_pct != null ? ` (${t.return_pct > 0 ? "+" : ""}${t.return_pct}%)` : ""} ・ ${formatDate(t.entry_datetime)}</div>
           <button class="btn btn-secondary journal-btn" data-trade-id="${t.id}">${hasJournal ? "日記を編集" : "日記を書く"}</button>
         </div>
       `;
@@ -448,7 +448,8 @@ async function openJournalModal(tradeId) {
       const field = journalForm.elements[key];
       if (field && trade[key] != null) field.value = trade[key];
     });
-    document.getElementById("journalModalTitle").textContent = `トレード日記 #${trade.id}`;
+    document.getElementById("journalModalTitle").textContent =
+      `トレード日記 #${trade.id}${trade.return_pct != null ? ` (${trade.return_pct > 0 ? "+" : ""}${trade.return_pct}%)` : ""}`;
     document.getElementById("tradeReviewResult").hidden = true;
 
     document.getElementById("editCurrencyPair").value = trade.currency_pair || "";

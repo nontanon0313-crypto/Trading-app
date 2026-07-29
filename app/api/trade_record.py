@@ -395,7 +395,9 @@ async def review_trade(trade_id: int, db: Session = Depends(get_db)):
 
 
 def _serialize_trade(trade: Trade) -> dict:
-    """journal_rule_tagsをJSON配列としてデコードして返す"""
+    """journal_rule_tagsをJSON配列としてデコードし、利益率(%)も付与して返す"""
+    from app.services.stats_calculator import _return_pct
+
     is_precommitted = bool(
         trade.journal_pre_committed_at and trade.exit_datetime
         and trade.journal_pre_committed_at < trade.exit_datetime
@@ -406,4 +408,6 @@ def _serialize_trade(trade: Trade) -> dict:
     except (ValueError, TypeError):
         data["journal_rule_tags"] = []
     data["is_precommitted"] = is_precommitted
+    return_pct = _return_pct(trade)
+    data["return_pct"] = round(return_pct, 3) if return_pct is not None else None
     return data
