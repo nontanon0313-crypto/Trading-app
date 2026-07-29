@@ -8,15 +8,19 @@ import json as _json
 from collections import defaultdict
 from typing import List, Optional
 from app.db.models import Trade
+from app.core.config import settings
 
 
 def _return_pct(t: Trade) -> Optional[float]:
-    """ロットサイズに依存しない、価格変動率(%)ベースの損益を計算する。
+    """証拠金に対するリターン率(%)を計算する。
+    価格変動率にレバレッジを掛けることで、ロットサイズに依存せず、
+    実際にフルレバで張った場合の資金効率を反映した値になる。
     符号は実際の損益(profit_loss)の符号に合わせる(side表記の誤りに影響されないため)。"""
     if t.entry_price is None or t.exit_price is None or t.profit_loss is None or t.entry_price == 0:
         return None
-    pct = abs(t.exit_price - t.entry_price) / abs(t.entry_price) * 100
-    return pct if t.profit_loss >= 0 else -pct
+    price_move_pct = abs(t.exit_price - t.entry_price) / abs(t.entry_price) * 100
+    leveraged_pct = price_move_pct * settings.LEVERAGE
+    return leveraged_pct if t.profit_loss >= 0 else -leveraged_pct
 
 
 def calculate_statistics(trades: List[Trade]) -> dict:

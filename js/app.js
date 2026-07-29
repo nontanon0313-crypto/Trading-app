@@ -646,7 +646,7 @@ async function loadStatistics() {
       <div class="stat-box"><div class="num">${stats.max_drawdown ?? "-"}</div><div class="lbl">最大ドローダウン</div></div>
       <div class="stat-box"><div class="num">${stats.max_winning_streak}</div><div class="lbl">最大連勝</div></div>
       <div class="stat-box"><div class="num">${stats.max_losing_streak}</div><div class="lbl">最大連敗</div></div>
-      <div class="stat-box"><div class="num">${stats.expectancy_pct != null ? stats.expectancy_pct + "%" : "-"}</div><div class="lbl">期待値(価格変動率%)</div></div>
+      <div class="stat-box"><div class="num">${stats.expectancy_pct != null ? stats.expectancy_pct + "%" : "-"}</div><div class="lbl">期待値(証拠金対比%・レバレッジ込み)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.precommit_rate)}</div><div class="lbl">事前記録率</div></div>
       <div class="stat-box"><div class="num">${stats.average_holding_minutes ?? "-"}</div><div class="lbl">平均保有時間(分)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.rule_adherence_rate)}</div><div class="lbl">ルール遵守率</div></div>

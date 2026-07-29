@@ -20,5 +20,8 @@ class Settings:
         "ALLOWED_ORIGINS", "*"
     ).split(",")
 
+    # レバレッジ(常にこの倍率でフルレバ運用している前提で、証拠金に対するリターン%を計算する)
+    LEVERAGE: float = float(os.getenv("LEVERAGE", "20"))
+
 
 settings = Settings()
