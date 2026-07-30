@@ -16,6 +16,15 @@ from app.services import claude_client
 
 router = APIRouter(prefix="/api/improvement", tags=["improvement"])
 
+def _strip_unfilled(stats: dict) -> dict:
+    """「未入力」グループを内訳から除外してから返す(AIが未入力を根拠に分析しないように)"""
+    stats = dict(stats)
+    for key in ("by_entry_reason", "by_exit_reason", "by_emotion", "by_confidence"):
+        if key in stats and isinstance(stats[key], dict):
+            stats[key] = {k: v for k, v in stats[key].items() if k != "未入力"}
+    return stats
+
+
 MILESTONES = [20, 50, 100, 150, 200, 300, 500]
 
 
@@ -33,7 +42,7 @@ def get_improvement_suggestions(db: Session = Depends(get_db)):
 
     try:
         # ポジション方向は分析対象外のため、AIに渡す前に除外する
-        stats_for_ai = {k: v for k, v in stats.items() if k != "by_side"}
+        stats_for_ai = _strip_unfilled({k: v for k, v in stats.items() if k != "by_side"})
         suggestions = claude_client.generate_improvement_suggestions(stats_for_ai)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI改善提案でエラーが発生しました: {e}")
@@ -87,7 +96,7 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
 
     try:
         # ポジション方向は分析対象外のため、統計データからも除外してAIに渡す
-        stats_for_ai = {k: v for k, v in stats.items() if k != "by_side"}
+        stats_for_ai = _strip_unfilled({k: v for k, v in stats.items() if k != "by_side"})
         analysis = await asyncio.to_thread(claude_client.analyze_milestone, stats_for_ai, trades_summary)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"節目分析でエラーが発生しました: {e}")
