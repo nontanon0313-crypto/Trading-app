@@ -297,12 +297,14 @@ function renderImportPreview(skippedCount) {
     const candidateOptions = (item.candidates || []).map(c => {
       const label = `#${c.id}: ${fmt(c.entry_price)} ・ ${formatDate(c.entry_datetime)}${c.journal_entry_reason ? " ・ " + c.journal_entry_reason.slice(0, 20) : ""}`;
       const selected = item.suggested_trade_id === c.id ? "selected" : "";
-      return `<option value="${c.id}" ${selected}>${escapeHtml(label)}に対応させる</option>`;
+      return `<option value="match:${c.id}" ${selected}>${escapeHtml(label)}に対応させる</option>`
+           + `<option value="clone:${c.id}">${escapeHtml(label)}の日記を複製して新規登録</option>`;
     }).join("");
 
     const otherOptions = others.map(c => {
       const label = `#${c.id}: ${c.currency_pair} ${fmt(c.entry_price)} ・ ${formatDate(c.entry_datetime)}${c.journal_entry_reason ? " ・ " + c.journal_entry_reason.slice(0, 20) : ""}`;
-      return `<option value="${c.id}">${escapeHtml(label)}に対応させる(他銘柄)</option>`;
+      return `<option value="match:${c.id}">${escapeHtml(label)}に対応させる(他銘柄)</option>`
+           + `<option value="clone:${c.id}">${escapeHtml(label)}の日記を複製して新規登録(他銘柄)</option>`;
     }).join("");
 
     const options = `<option value="new">新規作成として登録</option>${candidateOptions}${otherOptions}`;
@@ -333,8 +335,13 @@ document.getElementById("confirmImportBtn").addEventListener("click", async () =
   const items = Array.from(selects).map(sel => {
     const item = previewItems[parseInt(sel.dataset.idx, 10)];
     const chosen = sel.value;
+    let trade_id = null;
+    let clone_journal_from = null;
+    if (chosen.startsWith("match:")) trade_id = parseInt(chosen.slice(6), 10);
+    else if (chosen.startsWith("clone:")) clone_journal_from = parseInt(chosen.slice(6), 10);
     return {
-      trade_id: chosen === "new" ? null : parseInt(chosen, 10),
+      trade_id,
+      clone_journal_from,
       currency_pair: item.currency_pair,
       side: item.side,
       entry_price: item.entry_price,

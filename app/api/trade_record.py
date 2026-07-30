@@ -130,6 +130,7 @@ def _list_all_open_trades(db: Session) -> list:
 
 class ImportItem(BaseModel):
     trade_id: Optional[int] = None  # 指定があれば既存トレードを更新、無ければ新規作成
+    clone_journal_from: Optional[int] = None  # 指定があれば、そのトレードの日記内容をコピーして新規登録する
     currency_pair: str
     side: Optional[str] = None
     entry_price: float
@@ -149,6 +150,13 @@ def confirm_trades_from_image(body: ImportConfirmRequest, db: Session = Depends(
     """プレビューをユーザーが確認・修正した内容で、実際にトレード記録へ反映する"""
     created = []
     matched = []
+
+    JOURNAL_FIELDS = [
+        "journal_entry_reason", "journal_scenario", "journal_planned_take_profit",
+        "journal_stop_loss_basis", "journal_confidence", "journal_anxiety",
+        "journal_skip_consideration", "journal_followed_rule", "journal_emotion",
+        "journal_pre_notes", "journal_rule_tags", "journal_pre_committed_at",
+    ]
 
     for item in body.items:
         if item.trade_id:
@@ -172,6 +180,11 @@ def confirm_trades_from_image(body: ImportConfirmRequest, db: Session = Depends(
                 entry_datetime=item.entry_datetime,
                 exit_datetime=item.exit_datetime,
             )
+            if item.clone_journal_from:
+                template = db.query(Trade).filter(Trade.id == item.clone_journal_from).first()
+                if template:
+                    for field in JOURNAL_FIELDS:
+                        setattr(trade, field, getattr(template, field))
             db.add(trade)
             created.append(trade)
 
