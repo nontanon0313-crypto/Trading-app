@@ -259,6 +259,7 @@ tradeImageInput.addEventListener("change", () => {
 });
 
 let previewItems = [];
+let allOpenTrades = [];
 
 tradeAnalyzeBtn.addEventListener("click", async () => {
   if (!selectedTradeImage) return;
@@ -267,6 +268,7 @@ tradeAnalyzeBtn.addEventListener("click", async () => {
   try {
     const result = await Api.previewTradesFromImage(selectedTradeImage);
     previewItems = result.items || [];
+    allOpenTrades = result.all_open_trades || [];
     renderImportPreview(result.skipped_count);
   } catch (e) {
     tradeImportResult.hidden = false;
@@ -289,13 +291,22 @@ function renderImportPreview(skippedCount) {
   }
 
   list.innerHTML = previewItems.map((item, idx) => {
-    const options = [`<option value="new">新規作成として登録</option>`]
-      .concat((item.candidates || []).map(c => {
-        const label = `#${c.id}: ${fmt(c.entry_price)} ・ ${formatDate(c.entry_datetime)}${c.journal_entry_reason ? " ・ " + c.journal_entry_reason.slice(0, 20) : ""}`;
-        const selected = item.suggested_trade_id === c.id ? "selected" : "";
-        return `<option value="${c.id}" ${selected}>${escapeHtml(label)}に対応させる</option>`;
-      }))
-      .join("");
+    const candidateIds = new Set((item.candidates || []).map(c => c.id));
+    const others = allOpenTrades.filter(c => !candidateIds.has(c.id));
+
+    const candidateOptions = (item.candidates || []).map(c => {
+      const label = `#${c.id}: ${fmt(c.entry_price)} ・ ${formatDate(c.entry_datetime)}${c.journal_entry_reason ? " ・ " + c.journal_entry_reason.slice(0, 20) : ""}`;
+      const selected = item.suggested_trade_id === c.id ? "selected" : "";
+      return `<option value="${c.id}" ${selected}>${escapeHtml(label)}に対応させる</option>`;
+    }).join("");
+
+    const otherOptions = others.map(c => {
+      const label = `#${c.id}: ${c.currency_pair} ${fmt(c.entry_price)} ・ ${formatDate(c.entry_datetime)}${c.journal_entry_reason ? " ・ " + c.journal_entry_reason.slice(0, 20) : ""}`;
+      return `<option value="${c.id}">${escapeHtml(label)}に対応させる(他銘柄)</option>`;
+    }).join("");
+
+    const options = `<option value="new">新規作成として登録</option>${candidateOptions}${otherOptions}`;
+
     return `
       <div class="list-item">
         <div class="top-row">
@@ -343,6 +354,7 @@ document.getElementById("confirmImportBtn").addEventListener("click", async () =
     tradeImportResult.hidden = false;
     tradeImportResult.innerHTML = `<div class="reason-block"><span class="k">結果</span>新規${result.created_count}件・紐付け${result.matched_count}件を反映しました</div>`;
     previewItems = [];
+    allOpenTrades = [];
     loadTrades();
   } catch (e) {
     alert(e.message);

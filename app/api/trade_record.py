@@ -110,7 +110,22 @@ async def preview_trades_from_image(
             "candidates": full_candidates,
         })
 
-    return {"items": items, "skipped_count": skipped}
+    return {"items": items, "skipped_count": skipped, "all_open_trades": _list_all_open_trades(db)}
+
+
+def _list_all_open_trades(db: Session) -> list:
+    """通貨ペアを問わず、すべての未決済(保有中)トレードを返す(手動紐付けの選択肢用)"""
+    open_trades = db.query(Trade).filter(Trade.exit_price.is_(None)).order_by(Trade.entry_datetime).all()
+    return [
+        {
+            "id": c.id,
+            "currency_pair": c.currency_pair,
+            "entry_price": c.entry_price,
+            "entry_datetime": c.entry_datetime,
+            "journal_entry_reason": c.journal_entry_reason,
+        }
+        for c in open_trades
+    ]
 
 
 class ImportItem(BaseModel):
@@ -171,17 +186,24 @@ def confirm_trades_from_image(body: ImportConfirmRequest, db: Session = Depends(
     }
 
 
+def _normalize_pair(s):
+    """通貨ペア名の表記ゆれ(前後の空白・全角/半角スペース・大文字小文字)を吸収する"""
+    if not s:
+        return ""
+    return s.replace("　", "").replace(" ", "").strip().lower()
+
+
 def _find_candidate_open_trades(db: Session, row: dict) -> list:
-    """同じ通貨ペア・方向の未決済トレードを、古い順(FIFO推奨順)で候補として返す"""
+    """同じ通貨ペア・方向の未決済トレードを、古い順(FIFO推奨順)で候補として返す。
+    通貨ペア名は多少の表記ゆれ(空白・大文字小文字)を許容して照合する。"""
     currency_pair = row.get("currency_pair")
     side = row.get("side")
     if not currency_pair:
         return []
 
-    candidates = db.query(Trade).filter(
-        Trade.currency_pair == currency_pair,
-        Trade.exit_price.is_(None),
-    ).all()
+    normalized_target = _normalize_pair(currency_pair)
+    all_open = db.query(Trade).filter(Trade.exit_price.is_(None)).all()
+    candidates = [c for c in all_open if _normalize_pair(c.currency_pair) == normalized_target]
 
     if side:
         candidates = [c for c in candidates if not c.side or c.side == side]
