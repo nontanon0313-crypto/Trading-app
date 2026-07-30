@@ -371,6 +371,29 @@ document.getElementById("confirmImportBtn").addEventListener("click", async () =
   }
 });
 
+function renderTradeItem(t) {
+  const pl = t.profit_loss;
+  const plClass = pl > 0 ? "pos" : pl < 0 ? "neg" : "";
+  const hasJournal = t.journal_entry_reason || t.journal_post_notes;
+  const isOpen = t.exit_price == null;
+  return `
+    <div class="list-item">
+      <div class="top-row">
+        <span class="pair">#${t.id} ${t.currency_pair}${hasJournal ? " 📝" : ""}${isOpen ? ' <span class="direction-badge skip">保有中</span>' : ""}</span>
+        <span class="pl ${plClass}">${pl != null ? (pl > 0 ? "+" : "") + pl : "-"}</span>
+      </div>
+      <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)}${t.return_pct != null ? ` (${t.return_pct > 0 ? "+" : ""}${t.return_pct}%)` : ""} ・ ${formatDate(t.entry_datetime)}</div>
+      <button class="btn btn-secondary journal-btn" data-trade-id="${t.id}">${hasJournal ? "日記を編集" : "日記を書く"}</button>
+    </div>
+  `;
+}
+
+function attachJournalButtons(container) {
+  container.querySelectorAll(".journal-btn").forEach(btn => {
+    btn.addEventListener("click", () => openJournalModal(btn.dataset.tradeId));
+  });
+}
+
 async function loadTrades() {
   const container = document.getElementById("tradesList");
   try {
@@ -379,25 +402,33 @@ async function loadTrades() {
       container.innerHTML = `<div class="empty-state">まだ記録がありません</div>`;
       return;
     }
-    container.innerHTML = trades.map(t => {
-      const pl = t.profit_loss;
-      const plClass = pl > 0 ? "pos" : pl < 0 ? "neg" : "";
-      const hasJournal = t.journal_entry_reason || t.journal_post_notes;
-      const isOpen = t.exit_price == null;
-      return `
-        <div class="list-item">
-          <div class="top-row">
-            <span class="pair">#${t.id} ${t.currency_pair}${hasJournal ? " 📝" : ""}${isOpen ? ' <span class="direction-badge skip">保有中</span>' : ""}</span>
-            <span class="pl ${plClass}">${pl != null ? (pl > 0 ? "+" : "") + pl : "-"}</span>
-          </div>
-          <div class="meta">${fmt(t.entry_price)} → ${fmt(t.exit_price)}${t.return_pct != null ? ` (${t.return_pct > 0 ? "+" : ""}${t.return_pct}%)` : ""} ・ ${formatDate(t.entry_datetime)}</div>
-          <button class="btn btn-secondary journal-btn" data-trade-id="${t.id}">${hasJournal ? "日記を編集" : "日記を書く"}</button>
-        </div>
-      `;
-    }).join("");
-    container.querySelectorAll(".journal-btn").forEach(btn => {
-      btn.addEventListener("click", () => openJournalModal(btn.dataset.tradeId));
-    });
+
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const isRecent = t => t.exit_price == null || !t.exit_datetime || new Date(t.exit_datetime).getTime() >= sevenDaysAgo;
+    const recent = trades.filter(isRecent);
+    const older = trades.filter(t => !isRecent(t));
+
+    let html = recent.length
+      ? recent.map(renderTradeItem).join("")
+      : `<div class="empty-state">保有中・直近7日以内の決済はありません</div>`;
+
+    if (older.length) {
+      html += `<button class="btn btn-secondary" id="showOlderTradesBtn">過去の記録を表示(${older.length}件)</button>`;
+      html += `<div id="olderTradesList" hidden>${older.map(renderTradeItem).join("")}</div>`;
+    }
+
+    container.innerHTML = html;
+    attachJournalButtons(container);
+
+    const showOlderBtn = document.getElementById("showOlderTradesBtn");
+    if (showOlderBtn) {
+      showOlderBtn.addEventListener("click", () => {
+        const olderList = document.getElementById("olderTradesList");
+        olderList.hidden = !olderList.hidden;
+        attachJournalButtons(olderList);
+        showOlderBtn.textContent = olderList.hidden ? `過去の記録を表示(${older.length}件)` : "過去の記録を隠す";
+      });
+    }
   } catch (e) {
     container.innerHTML = `<div class="empty-state">記録を取得できませんでした</div>`;
   }

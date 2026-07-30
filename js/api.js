@@ -173,7 +173,7 @@ const Api = {
   },
 
   async listTrades() {
-    const res = await fetch(`${API_BASE}/api/trades/?limit=50`);
+    const res = await fetch(`${API_BASE}/api/trades/?limit=1000`);
     if (!res.ok) throw new Error("記録一覧の取得に失敗しました");
     return res.json();
   },
