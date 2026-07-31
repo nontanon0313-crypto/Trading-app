@@ -188,6 +188,25 @@ async function loadAnalysisHistory() {
   }
 }
 
+document.getElementById("autoLinkAnalysisBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("autoLinkAnalysisBtn");
+  const result = document.getElementById("autoLinkResult");
+  btn.disabled = true;
+  btn.textContent = "処理中...";
+  try {
+    const data = await Api.autoLinkAnalysis();
+    result.hidden = false;
+    result.innerHTML = `<div class="reason-block">${data.linked_count}件を自動紐付けしました(対象${data.checked_count}件中)</div>`;
+    loadTrades();
+  } catch (e) {
+    result.hidden = false;
+    result.innerHTML = `<div class="reason-block">${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "未紐付けトレードに分析を自動紐付け";
+  }
+});
+
 // ---------- ②エントリー即時記録 ----------
 const pairSelect = document.getElementById("quickEntryPairSelect");
 const pairNewInput = document.getElementById("quickEntryPairNew");

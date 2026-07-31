@@ -84,6 +84,12 @@ const Api = {
     return res.json();
   },
 
+  async autoLinkAnalysis() {
+    const res = await fetch(`${API_BASE}/api/trades/auto-link-analysis`, { method: "POST" });
+    if (!res.ok) throw new Error("自動紐付けに失敗しました");
+    return res.json();
+  },
+
   async getCurrencyPairs() {
     const res = await fetch(`${API_BASE}/api/trades/currency-pairs`);
     if (!res.ok) return [];

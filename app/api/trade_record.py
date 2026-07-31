@@ -302,6 +302,42 @@ def delete_trade(trade_id: int, db: Session = Depends(get_db)):
     return {"status": "deleted"}
 
 
+@router.post("/auto-link-analysis")
+def auto_link_analysis(db: Session = Depends(get_db)):
+    """チャート分析が紐付いていないトレードに、エントリー日時より前・24時間以内で
+    最も直近のチャート分析(同一銘柄)を自動で紐付ける。"""
+    from datetime import timedelta
+
+    unlinked_trades = db.query(Trade).filter(
+        Trade.analysis_id.is_(None),
+        Trade.entry_datetime.isnot(None),
+    ).all()
+
+    all_analyses = db.query(ChartAnalysis).filter(ChartAnalysis.created_at.isnot(None)).all()
+
+    linked_count = 0
+    for trade in unlinked_trades:
+        target_pair = _normalize_pair(trade.currency_pair)
+        window_start = trade.entry_datetime - timedelta(hours=24)
+
+        candidates = [
+            a for a in all_analyses
+            if _normalize_pair(a.currency_pair) == target_pair
+            and target_pair != ""
+            and window_start <= a.created_at <= trade.entry_datetime
+        ]
+        if not candidates:
+            continue
+
+        # 24時間以内で最も直近(エントリーに一番近い)ものを選ぶ
+        best = max(candidates, key=lambda a: a.created_at)
+        trade.analysis_id = best.id
+        linked_count += 1
+
+    db.commit()
+    return {"linked_count": linked_count, "checked_count": len(unlinked_trades)}
+
+
 @router.get("/currency-pairs")
 def list_currency_pairs(db: Session = Depends(get_db)):
     """過去に使われた通貨ペア名の一覧(表記ゆれ防止のための選択候補用)"""
