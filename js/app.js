@@ -712,6 +712,10 @@ async function loadStatistics() {
     if (winRateInput && !winRateInput.dataset.touched && stats.win_rate != null) {
       winRateInput.value = stats.win_rate;
     }
+    const lossInput = document.getElementById("calcLossPct");
+    if (lossInput && !lossInput.dataset.touched && stats.average_loss_pct != null) {
+      lossInput.value = stats.average_loss_pct;
+    }
     grid.innerHTML = `
       <div class="stat-box"><div class="num">${stats.total_trades}</div><div class="lbl">総トレード数</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.win_rate)}</div><div class="lbl">勝率</div></div>
@@ -721,7 +725,11 @@ async function loadStatistics() {
       <div class="stat-box"><div class="num">${stats.max_losing_streak}</div><div class="lbl">最大連敗</div></div>
       <div class="stat-box"><div class="num">${stats.expectancy_pct != null ? stats.expectancy_pct + "%" : "-"}</div><div class="lbl">期待値(証拠金対比%・単純平均)</div></div>
       <div class="stat-box"><div class="num">${stats.wiped_out ? "破綻" : (stats.geometric_expectancy_pct != null ? stats.geometric_expectancy_pct + "%" : "-")}</div><div class="lbl">期待値(複利ベース・フルレバ実態)</div></div>
+      <div class="stat-box"><div class="num">${stats.breakeven_required_gain_pct != null ? stats.breakeven_required_gain_pct + "%" : "-"}</div><div class="lbl">損益分岐に必要な利益率</div></div>
+      <div class="stat-box"><div class="num" style="color:${stats.breakeven_gap_pct != null ? (stats.breakeven_gap_pct >= 0 ? 'var(--long)' : 'var(--short)') : 'inherit'}">${stats.breakeven_gap_pct != null ? (stats.breakeven_gap_pct >= 0 ? "+" : "") + stats.breakeven_gap_pct + "%" : "-"}</div><div class="lbl">実際の平均利益率との差</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.precommit_rate)}</div><div class="lbl">事前記録率</div></div>
+      <div class="stat-box"><div class="num">${stats.average_win_pct != null ? "+" + stats.average_win_pct + "%" : "-"}</div><div class="lbl">平均利益率(勝ち)</div></div>
+      <div class="stat-box"><div class="num">${stats.average_loss_pct != null ? "-" + stats.average_loss_pct + "%" : "-"}</div><div class="lbl">平均損失率(負け)</div></div>
       <div class="stat-box"><div class="num">${stats.average_holding_minutes ?? "-"}</div><div class="lbl">平均保有時間(分)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.rule_adherence_rate)}</div><div class="lbl">ルール遵守率</div></div>
     `;
@@ -1030,6 +1038,9 @@ document.getElementById("leverageForm").addEventListener("submit", async (e) => 
 
 // ---------- 複利ブレークイーブン計算機 ----------
 document.getElementById("calcWinRate").addEventListener("input", (e) => {
+  e.target.dataset.touched = "1";
+});
+document.getElementById("calcLossPct").addEventListener("input", (e) => {
   e.target.dataset.touched = "1";
 });
 

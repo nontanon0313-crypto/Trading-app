@@ -62,6 +62,19 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
     # 単純平均(足し算)ではなく複利(掛け算)で資金が増減するため、こちらの方が実態に近い。
     geometric_expectancy_pct, compounded_total_return_pct, wiped_out = _geometric_expectancy(pct_values)
 
+    # 損益分岐ライン: 実際の勝率・平均損失率(%)から、複利ベースで収支トントンに必要な
+    # 平均利益率(%)を逆算し、実際の平均利益率と比較する。
+    win_pct_values = [v for v in (_return_pct(t, leverage_map) for t in wins) if v is not None]
+    loss_pct_values = [abs(v) for v in (_return_pct(t, leverage_map) for t in losses) if v is not None]
+    average_win_pct = round(sum(win_pct_values) / len(win_pct_values), 3) if win_pct_values else None
+    average_loss_pct = round(sum(loss_pct_values) / len(loss_pct_values), 3) if loss_pct_values else None
+    breakeven_required_gain_pct = _breakeven_required_gain(win_rate, average_loss_pct)
+    breakeven_gap_pct = (
+        round(average_win_pct - breakeven_required_gain_pct, 3)
+        if average_win_pct is not None and breakeven_required_gain_pct is not None
+        else None
+    )
+
     max_drawdown = _calculate_max_drawdown(closed_trades)
     max_losing_streak = _calculate_max_streak(closed_trades, winning=False)
     max_winning_streak = _calculate_max_streak(closed_trades, winning=True)
@@ -100,6 +113,10 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
         "geometric_expectancy_pct": geometric_expectancy_pct,
         "compounded_total_return_pct": compounded_total_return_pct,
         "wiped_out": wiped_out,
+        "average_win_pct": average_win_pct,
+        "average_loss_pct": average_loss_pct,
+        "breakeven_required_gain_pct": breakeven_required_gain_pct,
+        "breakeven_gap_pct": breakeven_gap_pct,
         "expectancy": round(expectancy, 2),
         "average_win": round(avg_win, 2),
         "average_loss": round(avg_loss, 2),
@@ -160,6 +177,23 @@ def _geometric_expectancy(pct_values: List[float]):
     return geometric_expectancy_pct, compounded_total_return_pct, False
 
 
+def _breakeven_required_gain(win_rate_pct: Optional[float], avg_loss_pct: Optional[float]) -> Optional[float]:
+    """勝率(%)と平均損失率(%)から、複利ベースで損益分岐となる平均利益率(%)を逆算する。
+    G = (1-L)^(-(1-p)/p) - 1 (p=勝率, L=平均損失率)"""
+    if win_rate_pct is None or avg_loss_pct is None:
+        return None
+    p = win_rate_pct / 100
+    L = avg_loss_pct / 100
+    if p <= 0 or p >= 1:
+        return None
+    if L <= 0:
+        return 0.0
+    if L >= 1:
+        return None  # 証拠金以上の損失(ロスカット超過)。数式上どんな利益率でも回復不可能
+    G = (1 - L) ** (-(1 - p) / p) - 1
+    return round(G * 100, 3)
+
+
 def _empty_stats() -> dict:
     return {
         "total_trades": 0,
@@ -169,6 +203,10 @@ def _empty_stats() -> dict:
         "geometric_expectancy_pct": None,
         "compounded_total_return_pct": None,
         "wiped_out": False,
+        "average_win_pct": None,
+        "average_loss_pct": None,
+        "breakeven_required_gain_pct": None,
+        "breakeven_gap_pct": None,
         "expectancy": None,
         "average_win": None,
         "average_loss": None,
