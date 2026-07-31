@@ -58,6 +58,10 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
     pct_values = [v for v in (_return_pct(t, leverage_map) for t in closed_trades) if v is not None]
     expectancy_pct = round(sum(pct_values) / len(pct_values), 3) if pct_values else None
 
+    # 複利ベースの期待値(幾何平均)。フルレバで毎回証拠金を全額使う場合、
+    # 単純平均(足し算)ではなく複利(掛け算)で資金が増減するため、こちらの方が実態に近い。
+    geometric_expectancy_pct, compounded_total_return_pct, wiped_out = _geometric_expectancy(pct_values)
+
     max_drawdown = _calculate_max_drawdown(closed_trades)
     max_losing_streak = _calculate_max_streak(closed_trades, winning=False)
     max_winning_streak = _calculate_max_streak(closed_trades, winning=True)
@@ -93,6 +97,9 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
         "win_rate": round(win_rate, 2),
         "profit_factor": round(profit_factor, 2) if profit_factor is not None else None,
         "expectancy_pct": expectancy_pct,
+        "geometric_expectancy_pct": geometric_expectancy_pct,
+        "compounded_total_return_pct": compounded_total_return_pct,
+        "wiped_out": wiped_out,
         "expectancy": round(expectancy, 2),
         "average_win": round(avg_win, 2),
         "average_loss": round(avg_loss, 2),
@@ -132,12 +139,36 @@ def _extract_tags(t: Trade) -> list:
         return []
 
 
+def _geometric_expectancy(pct_values: List[float]):
+    """複利(掛け算)ベースの期待値を計算する。
+    どこかの1トレードで-100%以上の損失(証拠金以上の損失=ロスカット超過)が
+    あった場合は、資金がゼロ以下になったとみなし wiped_out=True を返す。"""
+    if not pct_values:
+        return None, None, False
+
+    growth_factor = 1.0
+    for pct in pct_values:
+        factor = 1 + pct / 100
+        if factor <= 0:
+            return None, None, True
+        growth_factor *= factor
+
+    n = len(pct_values)
+    geometric_mean_factor = growth_factor ** (1 / n)
+    geometric_expectancy_pct = round((geometric_mean_factor - 1) * 100, 3)
+    compounded_total_return_pct = round((growth_factor - 1) * 100, 2)
+    return geometric_expectancy_pct, compounded_total_return_pct, False
+
+
 def _empty_stats() -> dict:
     return {
         "total_trades": 0,
         "win_rate": None,
         "profit_factor": None,
         "expectancy_pct": None,
+        "geometric_expectancy_pct": None,
+        "compounded_total_return_pct": None,
+        "wiped_out": False,
         "expectancy": None,
         "average_win": None,
         "average_loss": None,

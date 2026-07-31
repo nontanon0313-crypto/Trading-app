@@ -689,6 +689,10 @@ async function loadStatistics() {
   const breakdown = document.getElementById("statsBreakdown");
   try {
     const stats = await Api.getStatistics();
+    const winRateInput = document.getElementById("calcWinRate");
+    if (winRateInput && !winRateInput.dataset.touched && stats.win_rate != null) {
+      winRateInput.value = stats.win_rate;
+    }
     grid.innerHTML = `
       <div class="stat-box"><div class="num">${stats.total_trades}</div><div class="lbl">総トレード数</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.win_rate)}</div><div class="lbl">勝率</div></div>
@@ -696,7 +700,8 @@ async function loadStatistics() {
       <div class="stat-box"><div class="num">${stats.max_drawdown ?? "-"}</div><div class="lbl">最大ドローダウン</div></div>
       <div class="stat-box"><div class="num">${stats.max_winning_streak}</div><div class="lbl">最大連勝</div></div>
       <div class="stat-box"><div class="num">${stats.max_losing_streak}</div><div class="lbl">最大連敗</div></div>
-      <div class="stat-box"><div class="num">${stats.expectancy_pct != null ? stats.expectancy_pct + "%" : "-"}</div><div class="lbl">期待値(証拠金対比%・レバレッジ込み)</div></div>
+      <div class="stat-box"><div class="num">${stats.expectancy_pct != null ? stats.expectancy_pct + "%" : "-"}</div><div class="lbl">期待値(証拠金対比%・単純平均)</div></div>
+      <div class="stat-box"><div class="num">${stats.wiped_out ? "破綻" : (stats.geometric_expectancy_pct != null ? stats.geometric_expectancy_pct + "%" : "-")}</div><div class="lbl">期待値(複利ベース・フルレバ実態)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.precommit_rate)}</div><div class="lbl">事前記録率</div></div>
       <div class="stat-box"><div class="num">${stats.average_holding_minutes ?? "-"}</div><div class="lbl">平均保有時間(分)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.rule_adherence_rate)}</div><div class="lbl">ルール遵守率</div></div>
@@ -1002,6 +1007,36 @@ document.getElementById("leverageForm").addEventListener("submit", async (e) => 
   } catch (err) {
     alert(err.message);
   }
+});
+
+// ---------- 複利ブレークイーブン計算機 ----------
+document.getElementById("calcWinRate").addEventListener("input", (e) => {
+  e.target.dataset.touched = "1";
+});
+
+document.getElementById("calcBreakevenBtn").addEventListener("click", () => {
+  const result = document.getElementById("calcBreakevenResult");
+  const winRatePct = parseFloat(document.getElementById("calcWinRate").value);
+  const lossPct = parseFloat(document.getElementById("calcLossPct").value);
+
+  if (!winRatePct || !lossPct || winRatePct <= 0 || winRatePct >= 100 || lossPct <= 0 || lossPct >= 100) {
+    result.hidden = false;
+    result.innerHTML = "勝率(0〜100の間)と損切り幅(0〜100の間)を正しく入力してください。";
+    return;
+  }
+
+  const p = winRatePct / 100;
+  const L = lossPct / 100;
+  // G = (1-L)^(-(1-p)/p) - 1  (複利ベースで損益分岐となる利確幅)
+  const G = Math.pow(1 - L, -(1 - p) / p) - 1;
+  const gPct = (G * 100).toFixed(2);
+
+  result.hidden = false;
+  result.innerHTML = `
+    勝率${winRatePct}%、損切り幅${lossPct}%の場合、複利ベースで損益分岐となる利確幅は
+    <strong>約${gPct}%</strong> です。<br>
+    トレーリングストップやターゲットが、これより十分大きい利益幅を狙えているかを目安にしてください。
+  `;
 });
 
 document.getElementById("clearDataBtn").addEventListener("click", async () => {
