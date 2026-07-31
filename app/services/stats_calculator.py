@@ -74,6 +74,13 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
         if average_win_pct is not None and breakeven_required_gain_pct is not None
         else None
     )
+    # 逆算: 実際の勝率・平均利益率から、置くべき損切り上限(%)を算出する
+    breakeven_max_loss_pct = _breakeven_max_loss(win_rate, average_win_pct)
+    breakeven_max_loss_gap_pct = (
+        round(breakeven_max_loss_pct - average_loss_pct, 3)
+        if breakeven_max_loss_pct is not None and average_loss_pct is not None
+        else None
+    )
 
     max_drawdown = _calculate_max_drawdown(closed_trades)
     max_losing_streak = _calculate_max_streak(closed_trades, winning=False)
@@ -117,6 +124,8 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
         "average_loss_pct": average_loss_pct,
         "breakeven_required_gain_pct": breakeven_required_gain_pct,
         "breakeven_gap_pct": breakeven_gap_pct,
+        "breakeven_max_loss_pct": breakeven_max_loss_pct,
+        "breakeven_max_loss_gap_pct": breakeven_max_loss_gap_pct,
         "expectancy": round(expectancy, 2),
         "average_win": round(avg_win, 2),
         "average_loss": round(avg_loss, 2),
@@ -177,6 +186,22 @@ def _geometric_expectancy(pct_values: List[float]):
     return geometric_expectancy_pct, compounded_total_return_pct, False
 
 
+def _breakeven_max_loss(win_rate_pct: Optional[float], avg_win_pct: Optional[float]) -> Optional[float]:
+    """勝率(%)と平均利益率(%)から、複利ベースで損益分岐となる損切り上限(%)を逆算する。
+    L = 1 - (1+G)^(-p/(1-p)) (p=勝率, G=平均利益率)
+    これを超える損切りをすると、その勝率・利益率では長期的に資金が減っていく計算になる。"""
+    if win_rate_pct is None or avg_win_pct is None:
+        return None
+    p = win_rate_pct / 100
+    G = avg_win_pct / 100
+    if p <= 0 or p >= 1:
+        return None
+    if G <= 0:
+        return 0.0  # 平均利益がゼロ以下なら、損切りの余地は無い
+    L = 1 - (1 + G) ** (-p / (1 - p))
+    return round(L * 100, 3)
+
+
 def _breakeven_required_gain(win_rate_pct: Optional[float], avg_loss_pct: Optional[float]) -> Optional[float]:
     """勝率(%)と平均損失率(%)から、複利ベースで損益分岐となる平均利益率(%)を逆算する。
     G = (1-L)^(-(1-p)/p) - 1 (p=勝率, L=平均損失率)"""
@@ -207,6 +232,8 @@ def _empty_stats() -> dict:
         "average_loss_pct": None,
         "breakeven_required_gain_pct": None,
         "breakeven_gap_pct": None,
+        "breakeven_max_loss_pct": None,
+        "breakeven_max_loss_gap_pct": None,
         "expectancy": None,
         "average_win": None,
         "average_loss": None,

@@ -716,6 +716,14 @@ async function loadStatistics() {
     if (lossInput && !lossInput.dataset.touched && stats.average_loss_pct != null) {
       lossInput.value = stats.average_loss_pct;
     }
+    const winRateInput2 = document.getElementById("calcWinRate2");
+    if (winRateInput2 && !winRateInput2.dataset.touched && stats.win_rate != null) {
+      winRateInput2.value = stats.win_rate;
+    }
+    const gainInput = document.getElementById("calcGainPct");
+    if (gainInput && !gainInput.dataset.touched && stats.average_win_pct != null) {
+      gainInput.value = stats.average_win_pct;
+    }
     grid.innerHTML = `
       <div class="stat-box"><div class="num">${stats.total_trades}</div><div class="lbl">総トレード数</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.win_rate)}</div><div class="lbl">勝率</div></div>
@@ -727,6 +735,8 @@ async function loadStatistics() {
       <div class="stat-box"><div class="num">${stats.wiped_out ? "破綻" : (stats.geometric_expectancy_pct != null ? stats.geometric_expectancy_pct + "%" : "-")}</div><div class="lbl">期待値(複利ベース・フルレバ実態)</div></div>
       <div class="stat-box"><div class="num">${stats.breakeven_required_gain_pct != null ? stats.breakeven_required_gain_pct + "%" : "-"}</div><div class="lbl">損益分岐に必要な利益率</div></div>
       <div class="stat-box"><div class="num" style="color:${stats.breakeven_gap_pct != null ? (stats.breakeven_gap_pct >= 0 ? 'var(--long)' : 'var(--short)') : 'inherit'}">${stats.breakeven_gap_pct != null ? (stats.breakeven_gap_pct >= 0 ? "+" : "") + stats.breakeven_gap_pct + "%" : "-"}</div><div class="lbl">実際の平均利益率との差</div></div>
+      <div class="stat-box"><div class="num">${stats.breakeven_max_loss_pct != null ? stats.breakeven_max_loss_pct + "%" : "-"}</div><div class="lbl">置くべき損切り上限(複利ベース)</div></div>
+      <div class="stat-box"><div class="num" style="color:${stats.breakeven_max_loss_gap_pct != null ? (stats.breakeven_max_loss_gap_pct >= 0 ? 'var(--long)' : 'var(--short)') : 'inherit'}">${stats.breakeven_max_loss_gap_pct != null ? (stats.breakeven_max_loss_gap_pct >= 0 ? "+" : "") + stats.breakeven_max_loss_gap_pct + "%" : "-"}</div><div class="lbl">損切り上限との余裕(マイナスは超過)</div></div>
       <div class="stat-box"><div class="num">${fmtPct(stats.precommit_rate)}</div><div class="lbl">事前記録率</div></div>
       <div class="stat-box"><div class="num">${stats.average_win_pct != null ? "+" + stats.average_win_pct + "%" : "-"}</div><div class="lbl">平均利益率(勝ち)</div></div>
       <div class="stat-box"><div class="num">${stats.average_loss_pct != null ? "-" + stats.average_loss_pct + "%" : "-"}</div><div class="lbl">平均損失率(負け)</div></div>
@@ -1043,6 +1053,12 @@ document.getElementById("calcWinRate").addEventListener("input", (e) => {
 document.getElementById("calcLossPct").addEventListener("input", (e) => {
   e.target.dataset.touched = "1";
 });
+document.getElementById("calcGainPct").addEventListener("input", (e) => {
+  e.target.dataset.touched = "1";
+});
+document.getElementById("calcWinRate2").addEventListener("input", (e) => {
+  e.target.dataset.touched = "1";
+});
 
 document.getElementById("calcBreakevenBtn").addEventListener("click", () => {
   const result = document.getElementById("calcBreakevenResult");
@@ -1066,6 +1082,36 @@ document.getElementById("calcBreakevenBtn").addEventListener("click", () => {
     勝率${winRatePct}%、損切り幅${lossPct}%の場合、複利ベースで損益分岐となる利確幅は
     <strong>約${gPct}%</strong> です。<br>
     トレーリングストップやターゲットが、これより十分大きい利益幅を狙えているかを目安にしてください。
+  `;
+});
+
+document.getElementById("calcWinRate2").addEventListener("input", (e) => {
+  const other = document.getElementById("calcWinRate");
+  if (!other.dataset.touched) other.value = e.target.value;
+});
+
+document.getElementById("calcMaxLossBtn").addEventListener("click", () => {
+  const result = document.getElementById("calcMaxLossResult");
+  const winRatePct = parseFloat(document.getElementById("calcWinRate2").value);
+  const gainPct = parseFloat(document.getElementById("calcGainPct").value);
+
+  if (!winRatePct || !gainPct || winRatePct <= 0 || winRatePct >= 100 || gainPct <= 0) {
+    result.hidden = false;
+    result.innerHTML = "勝率(0〜100の間)と平均利益率(0より大きい値)を正しく入力してください。";
+    return;
+  }
+
+  const p = winRatePct / 100;
+  const G = gainPct / 100;
+  // L = 1 - (1+G)^(-p/(1-p))  (複利ベースで損益分岐となる損切り上限)
+  const L = 1 - Math.pow(1 + G, -p / (1 - p));
+  const lPct = (L * 100).toFixed(2);
+
+  result.hidden = false;
+  result.innerHTML = `
+    勝率${winRatePct}%、平均利益率${gainPct}%の場合、複利ベースで置ける損切り上限は
+    <strong>約${lPct}%</strong> です。<br>
+    これを超える損切りをすると、この勝率・利益率では長期的に資金が減っていく計算になります。
   `;
 });
 

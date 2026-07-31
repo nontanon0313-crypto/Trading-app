@@ -167,8 +167,16 @@
         <div class="field"><label>勝率(%)</label><input type="number" step="0.1" id="calcWinRate"></div>
         <div class="field"><label>損切り幅(%)</label><input type="number" step="0.1" id="calcLossPct"></div>
       </div>
-      <button type="button" class="btn btn-primary" id="calcBreakevenBtn">計算する</button>
+      <button type="button" class="btn btn-primary" id="calcBreakevenBtn">利確幅から計算する</button>
       <div class="reason-block" id="calcBreakevenResult" hidden></div>
+
+      <h3 class="modal-section-title">逆算: 利益率から損切り上限を求める</h3>
+      <div class="field-row">
+        <div class="field"><label>勝率(%)</label><input type="number" step="0.1" id="calcWinRate2"></div>
+        <div class="field"><label>平均利益率(%)</label><input type="number" step="0.1" id="calcGainPct"></div>
+      </div>
+      <button type="button" class="btn btn-primary" id="calcMaxLossBtn">損切り上限を計算する</button>
+      <div class="reason-block" id="calcMaxLossResult" hidden></div>
     </div>
 
     <h2 class="section-title">日別カレンダー</h2>
