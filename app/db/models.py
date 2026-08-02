@@ -94,6 +94,7 @@ class Trade(Base):
     # ---- 事前記録・ルールタグ ----
     journal_pre_committed_at = Column(DateTime, nullable=True)  # エントリー理由等を最初に保存した日時
     journal_rule_tags = Column(Text, nullable=True)             # JSON配列文字列(複合条件タグ)
+    journal_exit_reason_tags = Column(Text, nullable=True)      # JSON配列文字列(決済理由タグ)
 
     verification = relationship("Verification", back_populates="trade", uselist=False)
 
@@ -141,12 +142,14 @@ class InstrumentLeverage(Base):
 
 
 class RuleTag(Base):
-    """事前記録で使う取引ルールタグのマスタ(カテゴリ別・編集可能)"""
+    """事前記録・決済で使うタグのマスタ(カテゴリ別・編集可能)
+    purpose: "entry"(エントリー時のルールタグ) または "exit"(決済理由タグ)"""
     __tablename__ = "rule_tags"
 
     id = Column(Integer, primary_key=True, index=True)
     category = Column(String, nullable=False)
     name = Column(String, nullable=False)
+    purpose = Column(String, nullable=False, default="entry")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

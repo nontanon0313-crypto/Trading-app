@@ -96,17 +96,17 @@ const Api = {
     return res.json();
   },
 
-  async getRuleTagLibrary() {
-    const res = await fetch(`${API_BASE}/api/rule-tags/`);
+  async getRuleTagLibrary(purpose = "entry") {
+    const res = await fetch(`${API_BASE}/api/rule-tags/?purpose=${purpose}`);
     if (!res.ok) return {};
     return res.json();
   },
 
-  async addRuleTagToLibrary(category, name) {
+  async addRuleTagToLibrary(category, name, purpose = "entry") {
     const res = await fetch(`${API_BASE}/api/rule-tags/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ category, name }),
+      body: JSON.stringify({ category, name, purpose }),
     });
     if (!res.ok) throw new Error("タグの追加に失敗しました");
     return res.json();

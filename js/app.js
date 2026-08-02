@@ -461,10 +461,12 @@ let currentJournalTradeId = null;
 let linkedAnalysisData = null;
 let selectedTags = new Set();
 let ruleTagLibrary = {};
+let exitSelectedTags = new Set();
+let exitTagLibrary = {};
 
-function renderTagPicker() {
-  const container = document.getElementById("ruleTagsPicker");
-  const categories = Object.keys(ruleTagLibrary);
+function renderTagPickerGeneric(containerId, library, selected) {
+  const container = document.getElementById(containerId);
+  const categories = Object.keys(library);
   if (!categories.length) {
     container.innerHTML = `<span class="hint">タグライブラリが空です</span>`;
     return;
@@ -473,8 +475,8 @@ function renderTagPicker() {
     <div>
       <div class="tag-cat-label">${escapeHtml(cat)}</div>
       <div class="tag-chips">
-        ${ruleTagLibrary[cat].map(t => `
-          <button type="button" class="tag-chip ${selectedTags.has(t.name) ? "selected" : ""}" data-tag="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>
+        ${library[cat].map(t => `
+          <button type="button" class="tag-chip ${selected.has(t.name) ? "selected" : ""}" data-tag="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>
         `).join("")}
       </div>
     </div>
@@ -483,11 +485,19 @@ function renderTagPicker() {
   container.querySelectorAll(".tag-chip").forEach(chip => {
     chip.addEventListener("click", () => {
       const tag = chip.dataset.tag;
-      if (selectedTags.has(tag)) selectedTags.delete(tag);
-      else selectedTags.add(tag);
+      if (selected.has(tag)) selected.delete(tag);
+      else selected.add(tag);
       chip.classList.toggle("selected");
     });
   });
+}
+
+function renderTagPicker() {
+  renderTagPickerGeneric("ruleTagsPicker", ruleTagLibrary, selectedTags);
+}
+
+function renderExitTagPicker() {
+  renderTagPickerGeneric("exitTagsPicker", exitTagLibrary, exitSelectedTags);
 }
 
 document.getElementById("addTagBtn").addEventListener("click", async () => {
@@ -497,11 +507,26 @@ document.getElementById("addTagBtn").addEventListener("click", async () => {
   const name = nameInput.value.trim();
   if (!category || !name) { alert("カテゴリとタグ名を入力してください"); return; }
   try {
-    await Api.addRuleTagToLibrary(category, name);
-    ruleTagLibrary = await Api.getRuleTagLibrary();
+    await Api.addRuleTagToLibrary(category, name, "entry");
+    ruleTagLibrary = await Api.getRuleTagLibrary("entry");
     selectedTags.add(name);
     renderTagPicker();
     catInput.value = "";
+    nameInput.value = "";
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+document.getElementById("addExitTagBtn").addEventListener("click", async () => {
+  const nameInput = document.getElementById("newExitTagName");
+  const name = nameInput.value.trim();
+  if (!name) { alert("タグ名を入力してください"); return; }
+  try {
+    await Api.addRuleTagToLibrary("決済理由", name, "exit");
+    exitTagLibrary = await Api.getRuleTagLibrary("exit");
+    exitSelectedTags.add(name);
+    renderExitTagPicker();
     nameInput.value = "";
   } catch (e) {
     alert(e.message);
@@ -531,8 +556,12 @@ async function openJournalModal(tradeId) {
     document.getElementById("editExitDatetime").value = toDatetimeLocalValue(trade.exit_datetime);
 
     selectedTags = new Set(Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags : []);
-    ruleTagLibrary = await Api.getRuleTagLibrary().catch(() => ({}));
+    ruleTagLibrary = await Api.getRuleTagLibrary("entry").catch(() => ({}));
     renderTagPicker();
+
+    exitSelectedTags = new Set(Array.isArray(trade.journal_exit_reason_tags) ? trade.journal_exit_reason_tags : []);
+    exitTagLibrary = await Api.getRuleTagLibrary("exit").catch(() => ({}));
+    renderExitTagPicker();
 
     const precommitEl = document.getElementById("precommitStatus");
     if (!trade.journal_pre_committed_at) {
@@ -661,6 +690,7 @@ journalForm.addEventListener("submit", async (e) => {
       : value;
   }
   payload.journal_rule_tags = Array.from(selectedTags);
+  payload.journal_exit_reason_tags = Array.from(exitSelectedTags);
   try {
     await Api.updateTradeJournal(currentJournalTradeId, payload);
     journalModal.hidden = true;
@@ -763,6 +793,7 @@ async function loadStatistics() {
       renderGroup("通貨ペア別", stats.by_currency_pair),
       renderGroup("ロング/ショート別", stats.by_side),
       renderGroup("ルールタグ別", stats.by_rule_tag),
+      renderGroup("決済理由タグ別", stats.by_exit_reason_tag),
       renderGroup("時間帯別", stats.by_hour),
       renderGroup("曜日別", stats.by_weekday),
       renderGroup("エントリー理由別", stats.by_entry_reason),

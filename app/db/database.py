@@ -41,15 +41,26 @@ def init_db():
 def _seed_default_rule_tags():
     """デフォルトのルールタグのうち、まだ登録されていないものだけを追加する(タグ単位で冪等)"""
     from app.db.models import RuleTag
-    from app.core.default_rule_tags import DEFAULT_RULE_TAGS
+    from app.core.default_rule_tags import DEFAULT_RULE_TAGS, DEFAULT_EXIT_REASON_TAGS
 
     db = SessionLocal()
     try:
-        existing = {(t.category, t.name) for t in db.query(RuleTag).all()}
+        # 既存タグでpurposeが未設定(NULL)のものは、entry(エントリー用)として扱う
+        db.query(RuleTag).filter(RuleTag.purpose.is_(None)).update({RuleTag.purpose: "entry"})
+        db.commit()
+
+        existing = {(t.category, t.name, t.purpose) for t in db.query(RuleTag).all()}
+
         for category, names in DEFAULT_RULE_TAGS.items():
             for name in names:
-                if (category, name) not in existing:
-                    db.add(RuleTag(category=category, name=name))
+                if (category, name, "entry") not in existing:
+                    db.add(RuleTag(category=category, name=name, purpose="entry"))
+
+        for category, names in DEFAULT_EXIT_REASON_TAGS.items():
+            for name in names:
+                if (category, name, "exit") not in existing:
+                    db.add(RuleTag(category=category, name=name, purpose="exit"))
+
         db.commit()
     finally:
         db.close()
@@ -83,6 +94,7 @@ def _migrate_add_missing_columns():
             "ai_review_created_at": "TIMESTAMP",
             "journal_pre_committed_at": "TIMESTAMP",
             "journal_rule_tags": "TEXT",
+            "journal_exit_reason_tags": "TEXT",
         },
         "chart_analyses": {
             "tag_evaluations": "TEXT",
@@ -90,6 +102,9 @@ def _migrate_add_missing_columns():
             "tag_conflicts": "TEXT",
             "scenario_forecast": "TEXT",
             "timeframes_used": "TEXT",
+        },
+        "rule_tags": {
+            "purpose": "VARCHAR",
         },
     }
 

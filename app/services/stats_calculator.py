@@ -107,6 +107,7 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
         leverage_map=leverage_map,
     )
     by_rule_tag = _group_stats_multi(closed_trades, tags_fn=_extract_tags, leverage_map=leverage_map)
+    by_exit_reason_tag = _group_stats_multi(closed_trades, tags_fn=_extract_exit_tags, leverage_map=leverage_map)
 
     avg_holding_minutes = _average_holding_time(closed_trades)
     rule_adherence_rate = _rule_adherence_rate(closed_trades)
@@ -150,6 +151,7 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
         "by_emotion": by_emotion,
         "by_confidence": by_confidence,
         "by_rule_tag": by_rule_tag,
+        "by_exit_reason_tag": by_exit_reason_tag,
     }
 
 
@@ -166,6 +168,15 @@ def _extract_tags(t: Trade) -> list:
         return []
     try:
         return _json.loads(t.journal_rule_tags)
+    except (ValueError, TypeError):
+        return []
+
+
+def _extract_exit_tags(t: Trade) -> list:
+    if not t.journal_exit_reason_tags:
+        return []
+    try:
+        return _json.loads(t.journal_exit_reason_tags)
     except (ValueError, TypeError):
         return []
 
@@ -259,6 +270,7 @@ def _empty_stats() -> dict:
         "by_emotion": {},
         "by_confidence": {},
         "by_rule_tag": {},
+        "by_exit_reason_tag": {},
     }
 
 

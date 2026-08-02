@@ -318,6 +318,14 @@
       <div class="field"><label>自由記述</label><textarea name="journal_pre_notes" rows="2"></textarea></div>
 
       <h3 class="modal-section-title">決済後</h3>
+      <div class="field">
+        <label>決済理由タグ(複数選択可)</label>
+        <div id="exitTagsPicker" class="tag-picker"></div>
+      </div>
+      <div class="field-row">
+        <input type="text" id="newExitTagName" placeholder="新しい決済理由タグ名">
+      </div>
+      <button type="button" class="btn btn-secondary" id="addExitTagBtn">ライブラリに追加</button>
       <div class="field"><label>利確/損切り理由</label><textarea name="journal_exit_reason" rows="2"></textarea></div>
       <div class="field">
         <label>想定通りだったか</label>

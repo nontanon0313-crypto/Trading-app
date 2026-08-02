@@ -58,6 +58,7 @@ class TradeJournalUpdate(BaseModel):
     journal_improvement: Optional[str] = None
     journal_post_notes: Optional[str] = None
     journal_rule_tags: Optional[List[str]] = None
+    journal_exit_reason_tags: Optional[List[str]] = None
 
 
 @router.post("/")
@@ -384,8 +385,8 @@ def update_trade_journal(trade_id: int, journal_in: TradeJournalUpdate, db: Sess
         trade.journal_pre_committed_at = datetime.utcnow()
 
     for field, value in updates.items():
-        if field == "journal_rule_tags":
-            trade.journal_rule_tags = _json.dumps(value, ensure_ascii=False) if value else None
+        if field in ("journal_rule_tags", "journal_exit_reason_tags"):
+            setattr(trade, field, _json.dumps(value, ensure_ascii=False) if value else None)
         else:
             setattr(trade, field, value)
 
@@ -434,6 +435,7 @@ async def review_trade(trade_id: int, db: Session = Depends(get_db)):
         "journal_improvement": trade.journal_improvement,
         "journal_post_notes": trade.journal_post_notes,
         "journal_rule_tags": _json.loads(trade.journal_rule_tags) if trade.journal_rule_tags else [],
+        "journal_exit_reason_tags": _json.loads(trade.journal_exit_reason_tags) if trade.journal_exit_reason_tags else [],
         "is_precommitted": is_precommitted,
     }
 
@@ -479,6 +481,10 @@ def _serialize_trade(trade: Trade, db: Session = None) -> dict:
         data["journal_rule_tags"] = _json.loads(trade.journal_rule_tags) if trade.journal_rule_tags else []
     except (ValueError, TypeError):
         data["journal_rule_tags"] = []
+    try:
+        data["journal_exit_reason_tags"] = _json.loads(trade.journal_exit_reason_tags) if trade.journal_exit_reason_tags else []
+    except (ValueError, TypeError):
+        data["journal_exit_reason_tags"] = []
     data["is_precommitted"] = is_precommitted
     leverage_map = get_leverage_map(db) if db is not None else None
     return_pct = _return_pct(trade, leverage_map)

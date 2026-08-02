@@ -78,6 +78,10 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
             tags = _json.loads(t.journal_rule_tags) if t.journal_rule_tags else []
         except (ValueError, TypeError):
             tags = []
+        try:
+            exit_tags = _json.loads(t.journal_exit_reason_tags) if t.journal_exit_reason_tags else []
+        except (ValueError, TypeError):
+            exit_tags = []
         is_precommitted = bool(
             t.journal_pre_committed_at and t.exit_datetime
             and t.journal_pre_committed_at < t.exit_datetime
@@ -87,6 +91,7 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
             "profit_loss": t.profit_loss,
             "entry_datetime": t.entry_datetime,
             "rule_tags": tags,
+            "exit_reason_tags": exit_tags,
             "is_precommitted": is_precommitted,
             "journal_entry_reason": t.journal_entry_reason,
             "journal_exit_reason": t.journal_exit_reason,
