@@ -15,7 +15,7 @@ FXトレードの検証・統計・改善提案を行うツールのバックエ
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # ANTHROPIC_API_KEYを設定する
+cp .env.example .env   # GEMINI_API_KEYを設定する
 uvicorn app.main:app --reload
 ```
 
@@ -29,7 +29,7 @@ uvicorn app.main:app --reload
 4. 設定項目
    - Build Command: `pip install -r requirements.txt`
    - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-5. Environment Variables に `ANTHROPIC_API_KEY` を追加
+5. Environment Variables に `GEMINI_API_KEY` を追加
 6. Deployを実行 → 発行されたURL(例: `https://xxxx.onrender.com`)がAPIのアドレスになる
 
 これで、スマホのブラウザ(PWAフロントエンド)からこのURLにアクセスして利用できます。
