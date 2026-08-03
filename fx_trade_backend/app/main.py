@@ -17,6 +17,7 @@ from app.api import (
     rule_tags,
     hypotheses,
     leverages,
+    reflection,
 )
 
 app = FastAPI(title=settings.APP_NAME)
@@ -39,6 +40,7 @@ app.include_router(admin.router)
 app.include_router(rule_tags.router)
 app.include_router(hypotheses.router)
 app.include_router(leverages.router)
+app.include_router(reflection.router)
 
 
 @app.on_event("startup")

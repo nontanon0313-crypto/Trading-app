@@ -136,6 +136,20 @@ class Hypothesis(Base):
     direction = Column(String, nullable=True)           # "buy"(ロングのみ) / "sell"(ショートのみ) / null(指定なし)
 
 
+class DailyReflection(Base):
+    """1日分のチャート画像から、見送った機会・無駄なホールドを振り返るためのテーブル。
+    統計・期待値計算には一切使わない、後付けの気づき用の参考記録。"""
+    __tablename__ = "daily_reflections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    reflection_date = Column(String, nullable=False)   # 対象の集計日(YYYY-MM-DD、7:15〜翌7:14基準)
+    missed_opportunities = Column(Text, nullable=True)  # 見送った(気づかなかった)機会の分析結果(JSON配列文字列)
+    holding_review = Column(Text, nullable=True)        # その日の実トレードの、無駄なホールドについての分析結果(JSON配列文字列)
+    raw_ai_response = Column(Text, nullable=True)
+
+
 class InstrumentLeverage(Base):
     """銘柄(通貨ペア)ごとのレバレッジ設定。未登録の銘柄はデフォルト値を使う。"""
     __tablename__ = "instrument_leverages"

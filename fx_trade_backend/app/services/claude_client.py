@@ -392,6 +392,62 @@ def analyze_milestone(stats: dict, trades_summary: list) -> dict:
     return _safe_json_parse(_extract_json_object(raw_text.strip()))
 
 
+REFLECTION_SYSTEM_PROMPT = """\
+あなたはFXトレードの振り返りコーチです。1日分の値動きが分かるチャート画像と、
+その日に実際に記録されたトレード一覧、エントリールールタグの一覧が渡されます。
+
+目的は2つあります。統計的な検証ではなく、気づきを得るための後付けの参考情報である
+ことを踏まえて、率直に分析してください。
+
+【1. 見送った機会の確認】
+チャート全体を見て、エントリールールタグに当てはまりそうな値動きがあったにも関わらず、
+その時間帯付近に記録されたトレードが無い箇所を探してください。見つかった場合、
+・どのタイミングか(チャート上のおおよその位置、可能であれば時刻)
+・どのルールタグに当てはまりそうか
+・その後どちらにどれくらい動いたか(値幅の目安)
+を記述してください。見つからなければ「特に無し」としてください。
+複数箇所ある場合はすべて記述して構いません。断定はせず、あくまで「〜のように見える」という
+書き方にしてください。
+
+【2. 無駄なホールドの確認】
+その日に実際に記録されたトレードについて、エントリーから決済までの間のチャートの値動きを見て、
+・利益が乗った後に伸び悩む/戻すのを長く持ちすぎていないか
+・すでに優位性が失われた後もポジションを持ち続けていないか
+など、無駄にホールドしてしまった時間帯が無いかを確認してください。該当があれば、
+そのトレードのどの区間が無駄だったと考えられるか、具体的に記述してください。
+該当が無ければ「特に無し」としてください。
+
+厳守事項:
+- 出力はすべて日本語で記述すること。英単語(変数名)を含めないこと。
+- 「証明する」「必ずこうだった」という断定はしないこと。あくまで見た目からの推測であることが伝わる書き方にすること。
+- これは1日単位の後付けレビューであり、統計的な結論(期待値・勝率等)は一切算出しないこと。
+- ポジション方向(ロング/ショート)の優劣についての一般的な結論は述べないこと。個別のトレードの説明としてロング/ショートに言及するのは構わない。
+
+必ず以下のJSON形式のみで回答してください。
+
+{
+  "missed_opportunities": ["見送った機会の説明(1件ずつ)、無ければ空配列"],
+  "holding_review": ["無駄なホールドの説明(1件ずつ)、無ければ空配列"]
+}
+"""
+
+
+def analyze_daily_reflection(image_bytes: bytes, media_type: str, trades_summary: list, entry_tag_names: list) -> dict:
+    """1日分のチャート画像から、見送った機会・無駄なホールドをGeminiに分析させる"""
+    tag_list_text = "\n".join(f"- {t}" for t in entry_tag_names) if entry_tag_names else "(タグ未登録)"
+    contents = [
+        f"エントリールールタグ一覧:\n{tag_list_text}",
+        "この日に実際に記録されたトレード一覧:\n" + json.dumps(trades_summary, ensure_ascii=False, default=str),
+        "この日のチャート画像:",
+        {"mime_type": media_type, "data": image_bytes},
+        "上記を踏まえて分析してください。",
+    ]
+    raw_text = _generate(REFLECTION_SYSTEM_PROMPT, contents, max_output_tokens=3000)
+    result = _safe_json_parse(_extract_json_object(raw_text.strip()))
+    result["_raw_response"] = raw_text
+    return result
+
+
 def _safe_json_parse(raw_text: str) -> dict:
     """Geminiのレスポンスからjsonを安全に取り出す(コードブロック等が混ざっても対応)"""
     text = raw_text.strip()
