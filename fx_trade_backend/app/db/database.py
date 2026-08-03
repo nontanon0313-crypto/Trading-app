@@ -106,6 +106,11 @@ def _migrate_add_missing_columns():
         "rule_tags": {
             "purpose": "VARCHAR",
         },
+        "hypotheses": {
+            "entry_hour_start": "INTEGER",
+            "entry_hour_end": "INTEGER",
+            "direction": "VARCHAR",
+        },
     }
 
     with engine.connect() as conn:
