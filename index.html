@@ -198,19 +198,30 @@
     <div class="result-card" id="milestoneResult" hidden></div>
 
     <h2 class="section-title">仮説検証</h2>
-    <p class="lede">「この条件は期待値が高そうだ」という仮説を登録すると、登録日以降のトレードだけで再現性を確認できます(後付け検証を防ぐため)。</p>
+    <p class="lede">「10時からずっと上がる」「ロングとショートで動きが違う」のような、時間帯・方向についての仮説を登録すると、登録日以降のトレードだけで再現性を確認できます(後付け検証を防ぐため)。タグの組み合わせに基づく仮説は「内訳」で常に確認できるためここでは扱いません。</p>
     <form class="card form-card" id="hypothesisForm">
-      <div class="field"><label>仮説の名前</label><input type="text" name="name" placeholder="例: トレンドライン+高値ブレイクは期待値が高い" required></div>
+      <div class="field"><label>仮説の名前</label><input type="text" name="name" placeholder="例: 10時からずっと上がる" required></div>
+      <div class="field-row">
+        <div class="field"><label>開始時刻(0-23、任意)</label><input type="number" min="0" max="23" name="entry_hour_start" id="hypothesisHourStart"></div>
+        <div class="field"><label>終了時刻(0-23、任意)</label><input type="number" min="0" max="23" name="entry_hour_end" id="hypothesisHourEnd"></div>
+      </div>
       <div class="field">
-        <label>対象タグ(すべて満たす場合のみ集計)</label>
-        <div id="hypothesisTagsPicker" class="tag-picker"></div>
+        <label>方向(任意)</label>
+        <select name="direction" id="hypothesisDirection">
+          <option value="">指定なし</option>
+          <option value="buy">ロングのみ</option>
+          <option value="sell">ショートのみ</option>
+        </select>
       </div>
       <div class="field"><label>メモ</label><textarea name="notes" rows="2"></textarea></div>
       <button type="submit" class="btn btn-primary">仮説を登録する</button>
     </form>
     <div id="hypothesisList" class="list"></div>
+  </section>
 
-    <button class="btn btn-danger" id="clearDataBtn">全データを削除する</button>
+  <!-- ④ 設定 -->
+  <section class="view" id="view-settings" data-view="settings" hidden>
+    <h1>設定</h1>
 
     <h2 class="section-title">銘柄別レバレッジ設定</h2>
     <p class="lede">未登録の銘柄はデフォルト(<span id="defaultLeverageLabel">-</span>倍)で計算されます。</p>
@@ -222,6 +233,21 @@
       <button type="submit" class="btn btn-primary">登録・更新する</button>
     </form>
     <div id="leverageList" class="list"></div>
+
+    <h2 class="section-title">データ管理</h2>
+    <button class="btn btn-danger" id="clearDataBtn">全データを削除する</button>
+  </section>
+
+  <!-- ⑤ 振り返り -->
+  <section class="view" id="view-reflection" data-view="reflection" hidden>
+    <h1>振り返り</h1>
+    <p class="lede">1日分の値動きが分かるチャート画像をアップロードすると、見送った(気づかなかった)機会や、無駄なホールドをAIが後付けで確認します。統計・期待値には反映されない、気づき用の参考記録です。</p>
+    <form class="card form-card" id="reflectionForm">
+      <div class="field"><label>対象日</label><input type="date" id="reflectionDate" required></div>
+      <div class="field"><label>チャート画像(1日分)</label><input type="file" id="reflectionImage" accept="image/*" required></div>
+      <button type="submit" class="btn btn-primary" id="reflectionSubmitBtn">分析する</button>
+    </form>
+    <div id="reflectionList" class="list"></div>
   </section>
 
 </main>
@@ -238,6 +264,14 @@
   <button class="tab" data-view="stats">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 19V9M12 19V5M19 19v-6" stroke-linecap="round"/></svg>
     <span>統計</span>
+  </button>
+  <button class="tab" data-view="settings">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>設定</span>
+  </button>
+  <button class="tab" data-view="reflection">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3v5h5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7v5l3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>振り返り</span>
   </button>
 </nav>
 
@@ -282,8 +316,9 @@
         <label id="linkedAnalysisLabel">紐付けなし</label>
         <select id="analysisSelect"></select>
       </div>
+      <p class="hint">分析結果を紐付けると、エントリー理由・シナリオ・損切り根拠に下書きが自動で入ります(空欄の場合のみ)。内容を確認・修正してください。</p>
       <button type="button" class="btn btn-secondary" id="linkAnalysisBtn">紐付ける</button>
-      <button type="button" class="btn btn-secondary" id="quoteAnalysisBtn">分析結果をエントリー理由/シナリオに引用</button>
+      <button type="button" class="btn btn-secondary" id="quoteAnalysisBtn">分析結果で上書きする</button>
 
       <h3 class="modal-section-title">エントリー前</h3>
       <div class="field" id="precommitStatus"></div>

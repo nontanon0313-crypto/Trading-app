@@ -6,7 +6,9 @@ function switchView(name) {
   views.forEach(v => v.hidden = v.dataset.view !== name);
   tabs.forEach(t => t.classList.toggle("active", t.dataset.view === name));
   if (name === "trades") loadTrades();
-  if (name === "stats") { loadStatistics(); loadCalendar(); loadHypotheses(); loadLeverages(); }
+  if (name === "stats") { loadStatistics(); loadCalendar(); loadHypotheses(); }
+  if (name === "settings") loadLeverages();
+  if (name === "reflection") loadReflections();
 }
 
 tabs.forEach(tab => {
@@ -589,11 +591,29 @@ async function openJournalModal(tradeId) {
     label.textContent = linkedAnalysisData
       ? `紐付け中: ${formatDate(linkedAnalysisData.created_at)} ${linkedAnalysisData.currency_pair || ""}`
       : "紐付けなし";
+    if (linkedAnalysisData) applyAnalysisDraft(false);
 
     journalModal.hidden = false;
   } catch (e) {
     alert(e.message);
   }
+}
+
+function applyAnalysisDraft(overwrite) {
+  if (!linkedAnalysisData) return;
+  const setIfEmpty = (name, value) => {
+    if (!value) return;
+    const field = journalForm.elements[name];
+    if (!field) return;
+    if (overwrite || !field.value) field.value = value;
+  };
+  setIfEmpty("journal_entry_reason", linkedAnalysisData.entry_reason);
+  const scenarioDraft = [linkedAnalysisData.trend, linkedAnalysisData.dow_theory].filter(Boolean).join(" / ");
+  setIfEmpty("journal_scenario", scenarioDraft);
+  const stopLossParts = [];
+  if (linkedAnalysisData.stop_loss != null) stopLossParts.push(`想定損切りライン: ${linkedAnalysisData.stop_loss}`);
+  if (linkedAnalysisData.support_resistance) stopLossParts.push(`根拠: ${linkedAnalysisData.support_resistance}`);
+  setIfEmpty("journal_stop_loss_basis", stopLossParts.join(" / "));
 }
 
 document.getElementById("linkAnalysisBtn").addEventListener("click", async () => {
@@ -605,7 +625,7 @@ document.getElementById("linkAnalysisBtn").addEventListener("click", async () =>
     linkedAnalysisData = await Api.getLinkedAnalysis(currentJournalTradeId);
     document.getElementById("linkedAnalysisLabel").textContent =
       `紐付け中: ${formatDate(linkedAnalysisData.created_at)} ${linkedAnalysisData.currency_pair || ""}`;
-    alert("紐付けました");
+    applyAnalysisDraft(false);
   } catch (e) {
     alert(e.message);
   }
@@ -613,8 +633,7 @@ document.getElementById("linkAnalysisBtn").addEventListener("click", async () =>
 
 document.getElementById("quoteAnalysisBtn").addEventListener("click", () => {
   if (!linkedAnalysisData) { alert("先にチャート分析を紐付けてください"); return; }
-  if (linkedAnalysisData.entry_reason) journalForm.elements["journal_entry_reason"].value = linkedAnalysisData.entry_reason;
-  if (linkedAnalysisData.trend) journalForm.elements["journal_scenario"].value = linkedAnalysisData.trend;
+  applyAnalysisDraft(true);
 });
 
 function localNowString() {
@@ -945,59 +964,45 @@ document.getElementById("milestoneBtn").addEventListener("click", async () => {
 });
 
 // ---------- 仮説検証 ----------
-let hypothesisSelectedTags = new Set();
-
-async function renderHypothesisTagPicker() {
-  const container = document.getElementById("hypothesisTagsPicker");
-  const library = await Api.getRuleTagLibrary().catch(() => ({}));
-  const categories = Object.keys(library);
-  if (!categories.length) {
-    container.innerHTML = `<span class="hint">タグライブラリが空です</span>`;
-    return;
-  }
-  container.innerHTML = categories.map(cat => `
-    <div>
-      <div class="tag-cat-label">${escapeHtml(cat)}</div>
-      <div class="tag-chips">
-        ${library[cat].map(t => `
-          <button type="button" class="tag-chip ${hypothesisSelectedTags.has(t.name) ? "selected" : ""}" data-tag="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>
-        `).join("")}
-      </div>
-    </div>
-  `).join("");
-
-  container.querySelectorAll(".tag-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      const tag = chip.dataset.tag;
-      if (hypothesisSelectedTags.has(tag)) hypothesisSelectedTags.delete(tag);
-      else hypothesisSelectedTags.add(tag);
-      chip.classList.toggle("selected");
-    });
-  });
-}
-
 document.getElementById("hypothesisForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!hypothesisSelectedTags.size) { alert("対象タグを1つ以上選んでください"); return; }
   const formData = new FormData(e.target);
+  const hourStart = formData.get("entry_hour_start");
+  const hourEnd = formData.get("entry_hour_end");
+  const direction = formData.get("direction");
+  if (!hourStart && !hourEnd && !direction) {
+    alert("時間帯か方向のどちらか一方は指定してください");
+    return;
+  }
   const payload = {
     name: formData.get("name"),
     notes: formData.get("notes") || null,
-    tags: Array.from(hypothesisSelectedTags),
+    entry_hour_start: hourStart ? Number(hourStart) : null,
+    entry_hour_end: hourEnd ? Number(hourEnd) : null,
+    direction: direction || null,
   };
   try {
     await Api.createHypothesis(payload);
     e.target.reset();
-    hypothesisSelectedTags = new Set();
-    renderHypothesisTagPicker();
     loadHypotheses();
   } catch (err) {
     alert(err.message);
   }
 });
 
+function _hypothesisConditionLabel(h) {
+  const parts = [];
+  if (h.entry_hour_start != null || h.entry_hour_end != null) {
+    const s = h.entry_hour_start != null ? h.entry_hour_start : 0;
+    const en = h.entry_hour_end != null ? h.entry_hour_end : 23;
+    parts.push(`${s}時〜${en}時`);
+  }
+  if (h.direction === "buy") parts.push("ロングのみ");
+  if (h.direction === "sell") parts.push("ショートのみ");
+  return parts.length ? parts.join(" ・ ") : "条件なし";
+}
+
 async function loadHypotheses() {
-  renderHypothesisTagPicker();
   const container = document.getElementById("hypothesisList");
   try {
     const hypotheses = await Api.listHypotheses();
@@ -1013,7 +1018,7 @@ async function loadHypotheses() {
           <div class="top-row"><span class="pair">${escapeHtml(h.name)}</span>
             <button class="tag-del-btn" data-id="${h.id}">削除</button>
           </div>
-          <div class="meta">対象タグ: ${h.tags.map(escapeHtml).join(" / ")}</div>
+          <div class="meta">条件: ${escapeHtml(_hypothesisConditionLabel(h))}</div>
           <div class="reason-block">
             <span class="k">登録後のみ(検証用) - ${formatDate(h.created_at)}以降</span>
             ${sr.trade_count}件 ・ 勝率 ${fmtPct(sr.win_rate)} ・ 期待値 ${sr.expectancy_pct != null ? sr.expectancy_pct + "%" : "-"}
@@ -1176,6 +1181,75 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ---------- 振り返り(1日単位、見送り・無駄なホールド確認) ----------
+function initReflectionDateDefault() {
+  const dateInput = document.getElementById("reflectionDate");
+  if (!dateInput) return;
+  const now = new Date();
+  // 集計日は7:15始まりなので、7:15より前の時刻は前日を初期値にする
+  if (now.getHours() < 7 || (now.getHours() === 7 && now.getMinutes() < 15)) {
+    now.setDate(now.getDate() - 1);
+  }
+  dateInput.value = now.toISOString().slice(0, 10);
+}
+initReflectionDateDefault();
+
+document.getElementById("reflectionForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = document.getElementById("reflectionImage").files[0];
+  const date = document.getElementById("reflectionDate").value;
+  if (!file || !date) return;
+  const btn = document.getElementById("reflectionSubmitBtn");
+  btn.disabled = true;
+  btn.textContent = "分析中...";
+  try {
+    await Api.createReflection(file, date);
+    e.target.reset();
+    initReflectionDateDefault();
+    loadReflections();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "分析する";
+  }
+});
+
+async function loadReflections() {
+  const container = document.getElementById("reflectionList");
+  try {
+    const reflections = await Api.listReflections();
+    if (!reflections.length) {
+      container.innerHTML = `<div class="empty-state">まだ振り返り記録がありません</div>`;
+      return;
+    }
+    container.innerHTML = reflections.map(r => `
+      <div class="list-item">
+        <div class="top-row"><span class="pair">${escapeHtml(r.reflection_date)}</span>
+          <button class="tag-del-btn" data-id="${r.id}">削除</button>
+        </div>
+        <div class="reason-block">
+          <span class="k">見送った(気づかなかった)機会</span>
+          ${r.missed_opportunities.length ? `<ul>${r.missed_opportunities.map(m => `<li>${escapeHtml(m)}</li>`).join("")}</ul>` : "特に無し"}
+        </div>
+        <div class="reason-block">
+          <span class="k">無駄なホールド</span>
+          ${r.holding_review.length ? `<ul>${r.holding_review.map(m => `<li>${escapeHtml(m)}</li>`).join("")}</ul>` : "特に無し"}
+        </div>
+      </div>
+    `).join("");
+    container.querySelectorAll(".tag-del-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("この振り返りを削除しますか?")) return;
+        await Api.deleteReflection(btn.dataset.id);
+        loadReflections();
+      });
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state">振り返り一覧を取得できませんでした</div>`;
+  }
 }
 
 // ---------- 初期化 ----------
