@@ -144,6 +144,7 @@ METRIC_GLOSSARY = """\
 - by_emotion / by_confidence → 感情別 / 確信度別内訳
 - by_rule_tag → エントリールールタグ別内訳(エントリーカテゴリ)
 - by_exit_reason_tag → 決済理由タグ別内訳(決済カテゴリ)
+- by_reversal_sign → 反発・反転のサイン確認状況別内訳
 - trade_count → 該当件数
 - total_profit_loss → 合計損益(金額・参考値)
 """

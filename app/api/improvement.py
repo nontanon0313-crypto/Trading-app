@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/improvement", tags=["improvement"])
 def _strip_unfilled(stats: dict) -> dict:
     """「未入力」グループを内訳から除外してから返す(AIが未入力を根拠に分析しないように)"""
     stats = dict(stats)
-    for key in ("by_entry_reason", "by_exit_reason", "by_emotion", "by_confidence"):
+    for key in ("by_entry_reason", "by_exit_reason", "by_emotion", "by_confidence", "by_reversal_sign"):
         if key in stats and isinstance(stats[key], dict):
             stats[key] = {k: v for k, v in stats[key].items() if k != "未入力"}
     return stats

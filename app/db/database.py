@@ -95,6 +95,8 @@ def _migrate_add_missing_columns():
             "journal_pre_committed_at": "TIMESTAMP",
             "journal_rule_tags": "TEXT",
             "journal_exit_reason_tags": "TEXT",
+            "journal_reversal_sign": "VARCHAR",
+            "journal_reversal_sign_note": "TEXT",
         },
         "chart_analyses": {
             "tag_evaluations": "TEXT",

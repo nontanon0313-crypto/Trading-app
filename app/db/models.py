@@ -78,6 +78,8 @@ class Trade(Base):
     journal_anxiety = Column(Text, nullable=True)               # 不安要素
     journal_skip_consideration = Column(Text, nullable=True)   # 見送る理由はあったか
     journal_followed_rule = Column(String, nullable=True)      # ルール通りか(はい/いいえ/一部)
+    journal_reversal_sign = Column(String, nullable=True)       # 反発・反転のサインは無かったか("none"/"ignored"/"unsure")
+    journal_reversal_sign_note = Column(Text, nullable=True)    # ↑"ignored"の場合の、サインの内容メモ
     journal_emotion = Column(String, nullable=True)            # 感情(焦り/FOMO/冷静 等)
     journal_pre_notes = Column(Text, nullable=True)            # 自由記述(エントリー前)
 

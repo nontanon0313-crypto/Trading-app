@@ -109,6 +109,7 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
     )
     by_rule_tag = _group_stats_multi(closed_trades, tags_fn=_extract_tags, leverage_map=leverage_map)
     by_exit_reason_tag = _group_stats_multi(closed_trades, tags_fn=_extract_exit_tags, leverage_map=leverage_map)
+    by_reversal_sign = _group_stats(closed_trades, key=lambda t: _reversal_sign_label(t.journal_reversal_sign), leverage_map=leverage_map)
 
     avg_holding_minutes = _average_holding_time(closed_trades)
     rule_adherence_rate = _rule_adherence_rate(closed_trades)
@@ -153,6 +154,7 @@ def calculate_statistics(trades: List[Trade], leverage_map: Optional[Dict[str, f
         "by_confidence": by_confidence,
         "by_rule_tag": by_rule_tag,
         "by_exit_reason_tag": by_exit_reason_tag,
+        "by_reversal_sign": by_reversal_sign,
     }
 
 
@@ -162,6 +164,15 @@ def _side_label(side):
     if side == "sell":
         return "ショート"
     return "不明"
+
+
+def _reversal_sign_label(value):
+    labels = {
+        "none": "特になし",
+        "ignored": "サインはあったが、それでもエントリーした",
+        "unsure": "わからなかった",
+    }
+    return labels.get(value, "未入力")
 
 
 def _extract_tags(t: Trade) -> list:
@@ -272,6 +283,7 @@ def _empty_stats() -> dict:
         "by_confidence": {},
         "by_rule_tag": {},
         "by_exit_reason_tag": {},
+        "by_reversal_sign": {},
     }
 
 

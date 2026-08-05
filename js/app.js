@@ -544,6 +544,7 @@ async function openJournalModal(tradeId) {
       const field = journalForm.elements[key];
       if (field && trade[key] != null) field.value = trade[key];
     });
+    toggleReversalSignNote();
     document.getElementById("journalModalTitle").textContent =
       `トレード日記 #${trade.id}${trade.return_pct != null ? ` (${trade.return_pct > 0 ? "+" : ""}${trade.return_pct}%)` : ""}`;
     document.getElementById("tradeReviewResult").hidden = true;
@@ -615,6 +616,14 @@ function applyAnalysisDraft(overwrite) {
   if (linkedAnalysisData.support_resistance) stopLossParts.push(`根拠: ${linkedAnalysisData.support_resistance}`);
   setIfEmpty("journal_stop_loss_basis", stopLossParts.join(" / "));
 }
+
+function toggleReversalSignNote() {
+  const select = document.getElementById("journalReversalSign");
+  const noteField = document.getElementById("reversalSignNoteField");
+  if (!select || !noteField) return;
+  noteField.hidden = select.value !== "ignored";
+}
+document.getElementById("journalReversalSign").addEventListener("change", toggleReversalSignNote);
 
 document.getElementById("linkAnalysisBtn").addEventListener("click", async () => {
   const select = document.getElementById("analysisSelect");
@@ -819,6 +828,7 @@ async function loadStatistics() {
       renderGroup("利確/損切り理由別", stats.by_exit_reason),
       renderGroup("感情別", stats.by_emotion),
       renderGroup("確信度別", stats.by_confidence),
+      renderGroup("反発・反転サイン確認別", stats.by_reversal_sign),
     ].join("") || `<div class="empty-state">データがありません</div>`;
   } catch (e) {
     grid.innerHTML = `<div class="empty-state">統計を取得できませんでした</div>`;

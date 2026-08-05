@@ -25,6 +25,7 @@ PRE_TRADE_FIELDS = {
     "journal_stop_loss_basis", "journal_confidence", "journal_anxiety",
     "journal_skip_consideration", "journal_followed_rule", "journal_emotion",
     "journal_pre_notes", "journal_rule_tags",
+    "journal_reversal_sign", "journal_reversal_sign_note",
 }
 
 
@@ -51,6 +52,8 @@ class TradeJournalUpdate(BaseModel):
     journal_anxiety: Optional[str] = None
     journal_skip_consideration: Optional[str] = None
     journal_followed_rule: Optional[str] = None
+    journal_reversal_sign: Optional[str] = None
+    journal_reversal_sign_note: Optional[str] = None
     journal_emotion: Optional[str] = None
     journal_pre_notes: Optional[str] = None
     journal_exit_reason: Optional[str] = None
@@ -157,6 +160,7 @@ def confirm_trades_from_image(body: ImportConfirmRequest, db: Session = Depends(
         "journal_stop_loss_basis", "journal_confidence", "journal_anxiety",
         "journal_skip_consideration", "journal_followed_rule", "journal_emotion",
         "journal_pre_notes", "journal_rule_tags", "journal_pre_committed_at",
+        "journal_reversal_sign", "journal_reversal_sign_note",
     ]
 
     for item in body.items:

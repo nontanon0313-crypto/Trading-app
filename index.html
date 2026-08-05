@@ -339,6 +339,19 @@
       </div>
       <div class="field"><label>損切り根拠</label><textarea name="journal_stop_loss_basis" rows="2"></textarea></div>
       <div class="field"><label>不安要素</label><textarea name="journal_anxiety" rows="2"></textarea></div>
+      <div class="field">
+        <label>反発・反転のサインは無かったか?</label>
+        <select name="journal_reversal_sign" id="journalReversalSign">
+          <option value="">選択してください</option>
+          <option value="none">特になし</option>
+          <option value="ignored">サインはあったが、それでもエントリーした</option>
+          <option value="unsure">わからなかった</option>
+        </select>
+      </div>
+      <div class="field" id="reversalSignNoteField" hidden>
+        <label>どんなサインだったか</label>
+        <input type="text" name="journal_reversal_sign_note">
+      </div>
       <div class="field"><label>見送る理由はあったか</label><input type="text" name="journal_skip_consideration"></div>
       <div class="field">
         <label>ルール通りのトレードか</label>
