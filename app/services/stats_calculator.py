@@ -7,6 +7,7 @@
 外部から渡せるようにしている。渡されなければ、環境変数のデフォルト値を使う。
 """
 import json as _json
+from datetime import timedelta
 from collections import defaultdict
 from typing import List, Optional, Dict
 from app.db.models import Trade
@@ -375,8 +376,16 @@ def _group_stats_multi(trades: List[Trade], tags_fn, leverage_map: Optional[Dict
     return result
 
 
+def _trading_day(d) -> str:
+    """相場の区切り(7:15始まり〜翌7:14まで)に合わせた「集計日」を返す。
+    0:00〜7:14の間の時刻は、前日の集計日として扱う。"""
+    if d.hour < 7 or (d.hour == 7 and d.minute < 15):
+        d = d - timedelta(days=1)
+    return d.strftime("%Y-%m-%d")
+
+
 def calculate_daily_calendar(trades: List[Trade]) -> dict:
-    """日付ごとの損益・トレード数・感情をカレンダーヒートマップ用に集計する"""
+    """集計日(7:15〜翌7:14)ごとの損益・トレード数・感情をカレンダーヒートマップ用に集計する"""
     closed = [t for t in trades if t.profit_loss is not None]
     daily = defaultdict(lambda: {"profit_loss": 0.0, "trade_count": 0, "emotions": []})
 
@@ -384,7 +393,7 @@ def calculate_daily_calendar(trades: List[Trade]) -> dict:
         d = t.exit_datetime or t.entry_datetime or t.created_at
         if not d:
             continue
-        key = d.strftime("%Y-%m-%d")
+        key = _trading_day(d)
         daily[key]["profit_loss"] += t.profit_loss
         daily[key]["trade_count"] += 1
         if t.journal_emotion:

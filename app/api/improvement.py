@@ -41,8 +41,9 @@ def get_improvement_suggestions(db: Session = Depends(get_db)):
         )
 
     try:
-        # ポジション方向は分析対象外のため、AIに渡す前に除外する
-        EXCLUDE_KEYS = {"by_side", "average_win", "average_loss", "average_risk_reward"}
+        # ポジション方向・時間帯・曜日は分析対象外のため、AIに渡す前に除外する
+        # (時間帯・曜日はエントリーカテゴリに属さず、トレードは毎日行うため回避提案の根拠にしない)
+        EXCLUDE_KEYS = {"by_side", "average_win", "average_loss", "average_risk_reward", "by_hour", "by_weekday"}
         stats_for_ai = _strip_unfilled({k: v for k, v in stats.items() if k not in EXCLUDE_KEYS})
         suggestions = claude_client.generate_improvement_suggestions(stats_for_ai)
     except Exception as e:
@@ -89,7 +90,7 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
         trades_summary.append({
             "currency_pair": t.currency_pair,
             "profit_loss": t.profit_loss,
-            "entry_datetime": t.entry_datetime,
+            # entry_datetimeは意図的に含めない(時間帯・曜日はエントリーカテゴリに属さないため分析対象外)
             "rule_tags": tags,
             "exit_reason_tags": exit_tags,
             "is_precommitted": is_precommitted,
@@ -101,8 +102,9 @@ async def get_milestone_analysis(db: Session = Depends(get_db)):
         })
 
     try:
-        # ポジション方向は分析対象外のため、統計データからも除外してAIに渡す
-        EXCLUDE_KEYS = {"by_side", "average_win", "average_loss", "average_risk_reward"}
+        # ポジション方向・時間帯・曜日は分析対象外のため、統計データからも除外してAIに渡す
+        # (時間帯・曜日はエントリーカテゴリに属さず、トレードは毎日行うため回避提案の根拠にしない)
+        EXCLUDE_KEYS = {"by_side", "average_win", "average_loss", "average_risk_reward", "by_hour", "by_weekday"}
         stats_for_ai = _strip_unfilled({k: v for k, v in stats.items() if k not in EXCLUDE_KEYS})
         analysis = await asyncio.to_thread(claude_client.analyze_milestone, stats_for_ai, trades_summary)
     except Exception as e:

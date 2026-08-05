@@ -1,12 +1,16 @@
 """
 仮説検証API
-「この条件の組み合わせは期待値が高そうだ」という仮説を登録し、
-登録日以降に発生したトレードだけを使って再現性を検証する(後出しの検証を防ぐため)。
+「10時からずっと上がる」「ロングとショートで動きが違う」のような、時間帯・方向についての
+仮説を登録し、登録日以降に発生したトレードだけを使って再現性を検証する(後出しの検証を防ぐため)。
+
+タグの組み合わせに基づく仮説(例:トレンドライン+高値ブレイク)は、エントリー時に既にタグを
+選択済みでデータが十分取れているため、この機能では扱わない。「内訳」画面(エントリールール
+タグ別)でいつでも期待値を確認できる。
 """
 import json as _json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -19,30 +23,40 @@ router = APIRouter(prefix="/api/hypotheses", tags=["hypotheses"])
 
 class HypothesisCreate(BaseModel):
     name: str
-    tags: List[str]
     notes: Optional[str] = None
+    entry_hour_start: Optional[int] = None  # 0-23
+    entry_hour_end: Optional[int] = None    # 0-23
+    direction: Optional[str] = None         # "buy" | "sell" | None
 
 
-def _trade_tags(trade: Trade) -> list:
-    if not trade.journal_rule_tags:
-        return []
-    try:
-        return _json.loads(trade.journal_rule_tags)
-    except (ValueError, TypeError):
-        return []
+def _matches_hypothesis(trade: Trade, hypothesis: Hypothesis) -> bool:
+    """トレードがこの仮説の条件(時間帯・方向)に合致するか判定する"""
+    if hypothesis.direction and trade.side != hypothesis.direction:
+        return False
+
+    if hypothesis.entry_hour_start is not None or hypothesis.entry_hour_end is not None:
+        if not trade.entry_datetime:
+            return False
+        hour = trade.entry_datetime.hour
+        start = hypothesis.entry_hour_start if hypothesis.entry_hour_start is not None else 0
+        end = hypothesis.entry_hour_end if hypothesis.entry_hour_end is not None else 23
+        if start <= end:
+            if not (start <= hour <= end):
+                return False
+        else:
+            # 例: 22時〜翌3時のような日をまたぐ範囲指定
+            if not (hour >= start or hour <= end):
+                return False
+
+    return True
 
 
 def _verify(db: Session, hypothesis: Hypothesis) -> dict:
-    """この仮説の条件(タグの完全一致=AND)に該当するトレードの成績を、
+    """この仮説の条件(時間帯・方向)に該当するトレードの成績を、
     登録日以降(検証用)と全期間(参考)の両方で計算する"""
-    try:
-        target_tags = set(_json.loads(hypothesis.tags))
-    except (ValueError, TypeError):
-        target_tags = set()
-
     all_matching = [
         t for t in db.query(Trade).filter(Trade.profit_loss.isnot(None)).all()
-        if target_tags.issubset(set(_trade_tags(t)))
+        if _matches_hypothesis(t, hypothesis)
     ]
 
     post_registration = [
@@ -78,15 +92,13 @@ def list_hypotheses(db: Session = Depends(get_db)):
     hypotheses = db.query(Hypothesis).order_by(Hypothesis.created_at.desc()).all()
     result = []
     for h in hypotheses:
-        try:
-            tags = _json.loads(h.tags)
-        except (ValueError, TypeError):
-            tags = []
         result.append({
             "id": h.id,
             "name": h.name,
-            "tags": tags,
             "notes": h.notes,
+            "entry_hour_start": h.entry_hour_start,
+            "entry_hour_end": h.entry_hour_end,
+            "direction": h.direction,
             "created_at": h.created_at,
             "verification": _verify(db, h),
         })
@@ -96,13 +108,23 @@ def list_hypotheses(db: Session = Depends(get_db)):
 @router.post("/")
 def create_hypothesis(h_in: HypothesisCreate, db: Session = Depends(get_db)):
     """新しい仮説を登録する(この時点をもって「登録後データ」の起点とする)"""
-    if not h_in.tags:
-        raise HTTPException(status_code=400, detail="タグを最低1つ選んでください")
+    if h_in.entry_hour_start is None and h_in.entry_hour_end is None and not h_in.direction:
+        raise HTTPException(status_code=400, detail="時間帯か方向のどちらか一方は指定してください")
+
+    for hour in (h_in.entry_hour_start, h_in.entry_hour_end):
+        if hour is not None and not (0 <= hour <= 23):
+            raise HTTPException(status_code=400, detail="時刻は0〜23の範囲で指定してください")
+
+    if h_in.direction and h_in.direction not in ("buy", "sell"):
+        raise HTTPException(status_code=400, detail="方向はbuyまたはsellで指定してください")
 
     hypothesis = Hypothesis(
         name=h_in.name,
-        tags=_json.dumps(h_in.tags, ensure_ascii=False),
+        tags="[]",
         notes=h_in.notes,
+        entry_hour_start=h_in.entry_hour_start,
+        entry_hour_end=h_in.entry_hour_end,
+        direction=h_in.direction,
     )
     db.add(hypothesis)
     db.commit()

@@ -120,15 +120,34 @@ class Verification(Base):
 
 
 class Hypothesis(Base):
-    """仮説(条件の組み合わせ)を登録し、登録日以降のデータだけで再現性を検証するためのテーブル"""
+    """仮説(時間帯・方向などタグ以外の切り口)を登録し、登録日以降のデータだけで再現性を検証するためのテーブル。
+    タグに基づく仮説は「内訳」画面(エントリールールタグ別)で常時確認できるため、この機能では扱わない。"""
     __tablename__ = "hypotheses"
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    name = Column(String, nullable=False)          # 仮説の名前(例: トレンドライン+高値ブレイクは期待値が高い)
-    tags = Column(Text, nullable=False)             # JSON配列文字列(この仮説が対象とするルールタグの組み合わせ、AND条件)
+    name = Column(String, nullable=False)          # 仮説の名前(例: 10時からずっと上がる)
+    tags = Column(Text, nullable=False, default="[]")  # 旧仕様の名残(廃止済み、常に空配列を格納)
     notes = Column(Text, nullable=True)             # メモ
+
+    entry_hour_start = Column(Integer, nullable=True)   # 時間帯フィルタ(開始時, 0-23)
+    entry_hour_end = Column(Integer, nullable=True)     # 時間帯フィルタ(終了時, 0-23)
+    direction = Column(String, nullable=True)           # "buy"(ロングのみ) / "sell"(ショートのみ) / null(指定なし)
+
+
+class DailyReflection(Base):
+    """1日分のチャート画像から、見送った機会・無駄なホールドを振り返るためのテーブル。
+    統計・期待値計算には一切使わない、後付けの気づき用の参考記録。"""
+    __tablename__ = "daily_reflections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    reflection_date = Column(String, nullable=False)   # 対象の集計日(YYYY-MM-DD、7:15〜翌7:14基準)
+    missed_opportunities = Column(Text, nullable=True)  # 見送った(気づかなかった)機会の分析結果(JSON配列文字列)
+    holding_review = Column(Text, nullable=True)        # その日の実トレードの、無駄なホールドについての分析結果(JSON配列文字列)
+    raw_ai_response = Column(Text, nullable=True)
 
 
 class InstrumentLeverage(Base):
