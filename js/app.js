@@ -598,7 +598,15 @@ async function openJournalModal(tradeId) {
     document.getElementById("editEntryDatetime").value = toDatetimeLocalValue(trade.entry_datetime);
     document.getElementById("editExitDatetime").value = toDatetimeLocalValue(trade.exit_datetime);
 
-    selectedTags = new Set(Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags : []);
+    let initialRuleTags = Array.isArray(trade.journal_rule_tags) ? trade.journal_rule_tags : [];
+    if (!initialRuleTags.length && !trade.journal_pre_committed_at) {
+      // まだ何も記録されていない新規トレードの場合、前回使ったタグを自動で反映する
+      try {
+        const lastUsed = await Api.getLastUsedTags();
+        initialRuleTags = lastUsed.rule_tags || [];
+      } catch (e) { /* 取得できなくても致命的ではないので無視 */ }
+    }
+    selectedTags = new Set(initialRuleTags);
     ruleTagLibrary = await Api.getRuleTagLibrary("entry").catch(() => ({}));
     renderTagPicker();
 

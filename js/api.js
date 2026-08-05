@@ -110,6 +110,12 @@ const Api = {
     return res.json();
   },
 
+  async getLastUsedTags() {
+    const res = await fetch(`${API_BASE}/api/trades/last-used-tags`);
+    if (!res.ok) return { rule_tags: [] };
+    return res.json();
+  },
+
   async getRuleTagLibrary(purpose = "entry") {
     const res = await fetch(`${API_BASE}/api/rule-tags/?purpose=${purpose}`);
     if (!res.ok) return {};

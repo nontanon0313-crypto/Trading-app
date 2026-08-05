@@ -379,6 +379,24 @@ def list_rule_tags(db: Session = Depends(get_db)):
     return sorted(tags)
 
 
+@router.get("/last-used-tags")
+def get_last_used_tags(db: Session = Depends(get_db)):
+    """直近のトレードで使ったエントリールールタグを返す(新規記録時の自動反映用)"""
+    trade = (
+        db.query(Trade)
+        .filter(Trade.journal_rule_tags.isnot(None), Trade.journal_rule_tags != "[]")
+        .order_by(Trade.created_at.desc())
+        .first()
+    )
+    if not trade:
+        return {"rule_tags": []}
+    try:
+        tags = _json.loads(trade.journal_rule_tags)
+    except _json.JSONDecodeError:
+        tags = []
+    return {"rule_tags": tags}
+
+
 @router.get("/{trade_id}")
 def get_trade(trade_id: int, db: Session = Depends(get_db)):
     trade = db.query(Trade).filter(Trade.id == trade_id).first()
