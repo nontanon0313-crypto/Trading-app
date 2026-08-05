@@ -71,6 +71,20 @@ const Api = {
     return res.json();
   },
 
+  async previewPositionFromImage(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/api/trades/from-position-image/preview`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "画像からの読み取りに失敗しました");
+    }
+    return res.json();
+  },
+
   async confirmTradesFromImage(items) {
     const res = await fetch(`${API_BASE}/api/trades/from-image/confirm`, {
       method: "POST",

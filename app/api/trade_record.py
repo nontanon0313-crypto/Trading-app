@@ -73,6 +73,19 @@ def create_trade(trade_in: TradeCreate, db: Session = Depends(get_db)):
     return trade
 
 
+@router.post("/from-position-image/preview")
+async def preview_position_from_image(file: UploadFile = File(...)):
+    """注文直後のポジション画面のスクリーンショットから、通貨ペア・方向・価格・ロットを読み取る(まだ保存しない)"""
+    image_bytes, media_type = await validate_and_read_image(file)
+    try:
+        result = await asyncio.to_thread(claude_client.extract_position_from_image, image_bytes, media_type)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"画像読み取りでエラーが発生しました: {e}")
+    if not result.get("currency_pair") or result.get("entry_price") is None:
+        raise HTTPException(status_code=422, detail="エントリー内容を読み取れませんでした。画像がはっきり写っているか確認してください。")
+    return result
+
+
 @router.post("/from-image/preview")
 async def preview_trades_from_image(
     file: UploadFile = File(...),

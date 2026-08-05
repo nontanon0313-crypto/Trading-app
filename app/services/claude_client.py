@@ -298,6 +298,42 @@ MILESTONE_SYSTEM_PROMPT = """\
 """
 
 
+POSITION_SCREEN_SYSTEM_PROMPT = """\
+あなたはFX/CFD取引アプリのスクリーンショットを読み取るアシスタントです。
+GMOクリック証券などの取引画面(建玉数量・平均レート・評価損益が表示された、注文直後の画面)
+の画像が渡されます。エントリーした内容を読み取ってください。
+
+画面には通常、売(BID)側と買(ASK)側の2列で「建玉数量」「平均レート」が並んで表示されています。
+どちらか一方の列だけに0以外の建玉数量が入っているはずなので、その列を採用してください。
+・売側の列に建玉数量が入っていれば → ショート(sell)
+・買側の列に建玉数量が入っていれば → ロング(buy)
+両方とも0、または両方とも0以外(両建て)の場合は、判断できない旨を返してください。
+
+必ず以下のJSON形式のみで回答してください。読み取れない項目はnullにしてください。
+
+{
+  "currency_pair": "銘柄名(画面に表示されている通りの名称)",
+  "side": "buy または sell(判断できない場合はnull)",
+  "entry_price": 採用した側の平均レート(数値),
+  "lot_size": 採用した側の建玉数量(数値),
+  "ambiguous": true または false(両建て・判断不能などで自信が無い場合はtrue)
+}
+"""
+
+
+def extract_position_from_image(image_bytes: bytes, media_type: str = "image/png") -> dict:
+    """注文直後のポジション画面のスクリーンショットから、通貨ペア・方向・価格・ロットを読み取る"""
+    raw_text = _generate(
+        POSITION_SCREEN_SYSTEM_PROMPT,
+        [
+            {"mime_type": media_type, "data": image_bytes},
+            "この画像からエントリー内容を読み取ってください。",
+        ],
+        max_output_tokens=500,
+    ).strip()
+    return _safe_json_parse(_extract_json_object(raw_text))
+
+
 def extract_trade_rows(image_bytes: bytes, media_type: str = "image/png") -> list:
     """約定履歴画像をGeminiに送り、行データのリストを取得する"""
     from datetime import date

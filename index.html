@@ -101,6 +101,9 @@
     <p class="lede">ポジションを持ったら、決済前にここで記録してください。日記を先に書くことで、後付けバイアスのない分析ができます。</p>
 
     <form class="card form-card" id="quickEntryForm">
+      <input type="file" id="positionImageInput" accept="image/*" hidden>
+      <button type="button" class="btn btn-secondary" id="positionImageBtn">📷 ポジション画面から自動入力</button>
+      <p class="hint">通貨ペア・方向・価格・ロットを画像から読み取って下に反映します(必ず内容を確認してください)。</p>
       <div class="field-row">
         <div class="field">
           <label>通貨ペア</label>

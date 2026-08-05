@@ -230,6 +230,46 @@ pairSelect.addEventListener("change", () => {
   pairNewInput.hidden = pairSelect.value !== "__new__";
 });
 
+document.getElementById("positionImageBtn").addEventListener("click", () => {
+  document.getElementById("positionImageInput").click();
+});
+
+document.getElementById("positionImageInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const btn = document.getElementById("positionImageBtn");
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "読み取り中...";
+  try {
+    const result = await Api.previewPositionFromImage(file);
+
+    const quickEntryForm = document.getElementById("quickEntryForm");
+    const options = Array.from(pairSelect.options).map(o => o.value);
+    if (result.currency_pair && options.includes(result.currency_pair)) {
+      pairSelect.value = result.currency_pair;
+      pairNewInput.hidden = true;
+    } else if (result.currency_pair) {
+      pairSelect.value = "__new__";
+      pairNewInput.hidden = false;
+      pairNewInput.value = result.currency_pair;
+    }
+    if (result.side) quickEntryForm.elements["side"].value = result.side;
+    if (result.entry_price != null) quickEntryForm.elements["entry_price"].value = result.entry_price;
+    if (result.lot_size != null) quickEntryForm.elements["lot_size"].value = result.lot_size;
+
+    if (result.ambiguous || !result.side) {
+      alert("方向(ロング/ショート)を自動判定できませんでした。内容を確認して選び直してください。");
+    }
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+    e.target.value = "";
+  }
+});
+
 document.getElementById("quickEntryForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const formData = new FormData(e.target);
