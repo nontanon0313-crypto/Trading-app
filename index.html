@@ -154,6 +154,7 @@
     <div class="result-card" id="autoLinkResult" hidden></div>
 
     <h2 class="section-title">記録一覧</h2>
+    <div class="field"><label><input type="checkbox" id="unjournaledOnlyFilter"> ジャーナル未記入のみ表示</label></div>
     <div id="tradesList" class="list"></div>
   </section>
 
@@ -319,7 +320,7 @@
         <label id="linkedAnalysisLabel">紐付けなし</label>
         <select id="analysisSelect"></select>
       </div>
-      <p class="hint">分析結果を紐付けると、エントリー理由・シナリオ・損切り根拠に下書きが自動で入ります(空欄の場合のみ)。内容を確認・修正してください。</p>
+      <p class="hint">分析結果を紐付けると、エントリー理由・シナリオ・損切り根拠・該当しそうなルールタグ(確信度60以上のもの)に下書きが自動で入ります(未選択の場合のみ)。内容を確認・修正してください。</p>
       <button type="button" class="btn btn-secondary" id="linkAnalysisBtn">紐付ける</button>
       <button type="button" class="btn btn-secondary" id="quoteAnalysisBtn">分析結果で上書きする</button>
 

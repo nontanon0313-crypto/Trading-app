@@ -1,4 +1,4 @@
-const CACHE_NAME = "fx-trade-lab-v48";
+const CACHE_NAME = "fx-trade-lab-v50";
 const SHELL_FILES = [
   "./",
   "./index.html",

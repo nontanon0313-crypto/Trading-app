@@ -458,9 +458,15 @@ function attachJournalButtons(container) {
 async function loadTrades() {
   const container = document.getElementById("tradesList");
   try {
-    const trades = await Api.listTrades();
+    let trades = await Api.listTrades();
+    const unjournaledOnly = document.getElementById("unjournaledOnlyFilter").checked;
+    if (unjournaledOnly) {
+      trades = trades.filter(t => !t.journal_entry_reason && !t.journal_post_notes);
+    }
     if (!trades.length) {
-      container.innerHTML = `<div class="empty-state">まだ記録がありません</div>`;
+      container.innerHTML = unjournaledOnly
+        ? `<div class="empty-state">未記入のトレードはありません</div>`
+        : `<div class="empty-state">まだ記録がありません</div>`;
       return;
     }
 
@@ -496,6 +502,8 @@ async function loadTrades() {
 }
 
 // ---------- トレード日記モーダル ----------
+document.getElementById("unjournaledOnlyFilter").addEventListener("change", loadTrades);
+
 const journalModal = document.getElementById("journalModal");
 const journalForm = document.getElementById("journalForm");
 let currentJournalTradeId = null;
@@ -663,6 +671,20 @@ function applyAnalysisDraft(overwrite) {
   if (linkedAnalysisData.stop_loss != null) stopLossParts.push(`想定損切りライン: ${linkedAnalysisData.stop_loss}`);
   if (linkedAnalysisData.support_resistance) stopLossParts.push(`根拠: ${linkedAnalysisData.support_resistance}`);
   setIfEmpty("journal_stop_loss_basis", stopLossParts.join(" / "));
+
+  // チャート分析がyes判定した(確信度60以上の)ルールタグを候補として反映する
+  if (linkedAnalysisData.tag_evaluations) {
+    try {
+      const evaluations = JSON.parse(linkedAnalysisData.tag_evaluations);
+      const matchedTags = evaluations
+        .filter(ev => ev.judgment === "yes" && (ev.confidence == null || ev.confidence >= 60))
+        .map(ev => ev.tag);
+      if (matchedTags.length && (overwrite || selectedTags.size === 0)) {
+        selectedTags = new Set(matchedTags);
+        renderTagPicker();
+      }
+    } catch (e) { /* 解析できなければ何もしない */ }
+  }
 }
 
 function toggleReversalSignNote() {
