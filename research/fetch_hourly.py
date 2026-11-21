@@ -47,9 +47,15 @@ def decode_month(raw, year, month):
     return rows
 
 
+def is_idle(r):
+    """取引のない時間の足か。r=(時刻, 始値, 終値, 安値, 高値, 出来高)"""
+    return r[5] == 0 and r[1] == r[2] == r[3] == r[4]
+
+
 def fetch_month(sym, year, month, keep_zero=False):
     """買値・売値を取得して検証し、時刻で結合した行を返す。データ無しなら空リスト。
-    出来高が0の足(取引のない時間の、値動きのない足)は除く。keep_zero=Trueなら残す(確認用)。"""
+    取引のない時間の足(始値=高値=安値=終値で、出来高が0)は除く。keep_zero=Trueなら残す(確認用)。
+    出来高が0でも、値動きのある足は、実際に取引のあった時間なので残す。"""
     bid = decode_month(FD.http_get(month_url(sym, year, month, "BID")), year, month)
     ask = decode_month(FD.http_get(month_url(sym, year, month, "ASK")), year, month)
     if not bid or not ask:
@@ -59,7 +65,7 @@ def fetch_month(sym, year, month, keep_zero=False):
     out = []
     for r in bid:
         x = a.get(r[0])
-        if x and (keep_zero or r[5] > 0):
+        if x and (keep_zero or not is_idle(r)):
             # ts, bo, bh, bl, bc, ao, ah, al, ac, 出来高(買値側)
             out.append((base + r[0], r[1], r[4], r[3], r[2], x[1], x[4], x[3], x[2], float(r[5])))
     return out
@@ -122,7 +128,7 @@ def cmd_check(_a):
             if not rows:
                 raise ValueError("データが空です")
             d = FD.detect_divisor(sym, rows)
-            print(f"OK {sym}: 出来高のある足 {len(rows)}本 桁=1/{d} 始値={rows[0][1] / d}")
+            print(f"OK {sym}: 取引のある足 {len(rows)}本 桁=1/{d} 始値={rows[0][1] / d}")
         except Exception as e:  # noqa
             ok = False
             print(f"NG {sym}: {e}")
@@ -135,26 +141,27 @@ def cmd_check(_a):
             continue
         try:
             full = fetch_retry(sym, *probe, keep_zero=True)
-            filt = {r[0]: r[1:9] for r in full if r[9] > 0}
+            kept = [r for r in full if not is_idle((r[0], r[1], r[4], r[3], r[2], r[9]))]
             agg = aggregate_m1(con, sym, *probe)
         except Exception as e:  # noqa
             ok = False
             print(f"NG {sym}(照合): {e}")
             continue
-        hrows = filt
+        hrows = {r[0]: r[1:9] for r in kept}
         common = sorted(set(hrows) & set(agg))
-        extra_all = [r for r in full if r[0] not in agg]
-        extra_vol = [r for r in extra_all if r[9] > 0]
-        extra_flat = [r for r in extra_all if r[1] == r[2] == r[3] == r[4]]
-        print(f"[照合] {sym}: 1時間足(全て) {len(full)}本 / 出来高ありの足 {len(hrows)}本 / 1分足から作成 {len(agg)}本 / 共通 {len(common)}本")
-        print(f"  1分足にない時間: {len(extra_all)}本(うち出来高が0: {len(extra_all) - len(extra_vol)}本、値動きなし: {len(extra_flat)}本)")
-        if extra_vol:
-            ok = False
-            print(f"  NG: 1分足にない時間に、出来高のある足が{len(extra_vol)}本あります")
+        days_h = {t // 86400 for t in hrows}
+        days_m = {t // 86400 for t in agg}
+        m1_gap_days = len(days_h - days_m)
+        extra = [t for t in hrows if t not in agg]
         missing = [t for t in agg if t not in hrows]
-        if missing:
+        print(f"[照合] {sym}: 1時間足(全て) {len(full)}本 / 取引のない時間を除いた足 {len(kept)}本 / "
+              f"1分足から作成 {len(agg)}本 / 共通 {len(common)}本")
+        if m1_gap_days:
+            print(f"  注意: 1分足のDBに、{m1_gap_days}日分の抜けがあります(1時間足にはある日)。この銘柄の件数の照合は、参考です")
+        print(f"  1時間足にあって、1分足にない時間: {len(extra)}本 / 1分足にあって、1時間足にない時間: {len(missing)}本")
+        if not m1_gap_days and (len(extra) + len(missing)) > 0.01 * max(len(agg), 1):
             ok = False
-            print(f"  NG: 1分足にあって、1時間足にない時間が{len(missing)}本あります")
+            print("  NG: 1分足に抜けがないのに、時間が1%を超えて一致しません")
         if not common:
             ok = False
             print("  共通する時刻がありません(時刻の基準が違う可能性)")
@@ -176,8 +183,7 @@ def cmd_check(_a):
         lines = []
         for t in bad:
             gap_hours = (t - max([u for u in common if u < t], default=t)) / 3600
-            is_first = gap_hours >= 6
-            gap_first += int(is_first)
+            gap_first += int(gap_hours >= 6)
             if len(lines) < 5:
                 d = dt.datetime.fromtimestamp(t, UTC)
                 lines.append(f"    {d:%m-%d %H:%M}({'月火水木金土日'[d.weekday()]}) 1時間足の始値 {hrows[t][0]} / 1分足の始値 {agg[t][0]} / "
