@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 import fetch_dukascopy as FD
 
 UTC = dt.timezone.utc
+PROBE = (2023, 6)   # 形式の確認に使う月
 
 
 def month_url(sym, year, month, side):
@@ -46,8 +47,9 @@ def decode_month(raw, year, month):
     return rows
 
 
-def fetch_month(sym, year, month):
-    """買値・売値を取得して検証し、時刻で結合した行を返す。データ無しなら空リスト。"""
+def fetch_month(sym, year, month, keep_zero=False):
+    """買値・売値を取得して検証し、時刻で結合した行を返す。データ無しなら空リスト。
+    出来高が0の足(取引のない時間の、値動きのない足)は除く。keep_zero=Trueなら残す(確認用)。"""
     bid = decode_month(FD.http_get(month_url(sym, year, month, "BID")), year, month)
     ask = decode_month(FD.http_get(month_url(sym, year, month, "ASK")), year, month)
     if not bid or not ask:
@@ -57,7 +59,7 @@ def fetch_month(sym, year, month):
     out = []
     for r in bid:
         x = a.get(r[0])
-        if x:
+        if x and (keep_zero or r[5] > 0):
             # ts, bo, bh, bl, bc, ao, ah, al, ac, 出来高(買値側)
             out.append((base + r[0], r[1], r[4], r[3], r[2], x[1], x[4], x[3], x[2], float(r[5])))
     return out
@@ -97,38 +99,62 @@ def aggregate_m1(con, sym, year, month):
     return out
 
 
+def fetch_retry(sym, year, month, keep_zero=False, tries=3):
+    err = None
+    for i in range(tries):
+        try:
+            return fetch_month(sym, year, month, keep_zero)
+        except Exception as e:  # noqa
+            err = e
+            time.sleep(20)
+    raise err
+
+
 def cmd_check(_a):
     con = open_db()
     ok = True
     # 1) 形式の確認: 全銘柄の1か月分が、検証と価格帯の判定に通ること
-    probe = (2023, 6)
+    probe = PROBE
     print(f"[形式] {probe[0]}年{probe[1]}月の1時間足を、全銘柄で取得して検証します")
     for sym in FD.RANGES:
         try:
-            rows = fetch_month(sym, *probe)
+            rows = fetch_retry(sym, *probe)
             if not rows:
                 raise ValueError("データが空です")
             d = FD.detect_divisor(sym, rows)
-            print(f"OK {sym}: {len(rows)}本 桁=1/{d} 始値={rows[0][1] / d}")
+            print(f"OK {sym}: 出来高のある足 {len(rows)}本 桁=1/{d} 始値={rows[0][1] / d}")
         except Exception as e:  # noqa
             ok = False
             print(f"NG {sym}: {e}")
     # 2) 既存の1分足から作った1時間足と一致するか
+    names = ("買値始値", "買値高値", "買値安値", "買値終値", "売値始値", "売値高値", "売値安値", "売値終値")
     for sym in ("XAGUSD", "USDJPY"):
         has = con.execute("SELECT COUNT(*) FROM m1 WHERE symbol=? AND ts>=? AND ts<?",
                           (sym, *month_range(*probe))).fetchone()[0]
         if not has:
             continue
         try:
-            hrows = {r[0]: r[1:9] for r in fetch_month(sym, *probe)}
+            full = fetch_retry(sym, *probe, keep_zero=True)
+            filt = {r[0]: r[1:9] for r in full if r[9] > 0}
             agg = aggregate_m1(con, sym, *probe)
         except Exception as e:  # noqa
             ok = False
             print(f"NG {sym}(照合): {e}")
             continue
+        hrows = filt
         common = sorted(set(hrows) & set(agg))
-        names = ("買値始値", "買値高値", "買値安値", "買値終値", "売値始値", "売値高値", "売値安値", "売値終値")
-        print(f"[照合] {sym}: 1時間足 {len(hrows)}本 / 1分足から作成 {len(agg)}本 / 共通 {len(common)}本")
+        extra_all = [r for r in full if r[0] not in agg]
+        extra_vol = [r for r in extra_all if r[9] > 0]
+        extra_flat = [r for r in extra_all if r[1] == r[2] == r[3] == r[4]]
+        print(f"[照合] {sym}: 1時間足(全て) {len(full)}本 / 出来高ありの足 {len(hrows)}本 / 1分足から作成 {len(agg)}本 / 共通 {len(common)}本")
+        print(f"  1分足にない時間: {len(extra_all)}本(うち出来高が0: {len(extra_all) - len(extra_vol)}本、値動きなし: {len(extra_flat)}本)")
+        if extra_vol:
+            ok = False
+            print(f"  NG: 1分足にない時間に、出来高のある足が{len(extra_vol)}本あります")
+        missing = [t for t in agg if t not in hrows]
+        if missing:
+            ok = False
+            print(f"  NG: 1分足にあって、1時間足にない時間が{len(missing)}本あります")
         if not common:
             ok = False
             print("  共通する時刻がありません(時刻の基準が違う可能性)")
@@ -137,8 +163,28 @@ def cmd_check(_a):
             eq = sum(1 for t in common if hrows[t][k] == agg[t][k])
             diff = max(abs(hrows[t][k] - agg[t][k]) for t in common)
             print(f"  {nm}: 完全一致 {eq / len(common) * 100:.1f}% / 最大のずれ {diff}")
-            if eq / len(common) < 0.99:
+            if k != 0 and k != 4 and eq / len(common) < 0.999:
                 ok = False
+        # 始値のずれの内訳(週明けの最初の足か)
+        prev_close = {}
+        last = None
+        for r in sorted(full):
+            prev_close[r[0]] = last
+            last = r[4]
+        bad = [t for t in common if hrows[t][0] != agg[t][0]]
+        gap_first = 0
+        lines = []
+        for t in bad:
+            gap_hours = (t - max([u for u in common if u < t], default=t)) / 3600
+            is_first = gap_hours >= 6
+            gap_first += int(is_first)
+            if len(lines) < 5:
+                d = dt.datetime.fromtimestamp(t, UTC)
+                lines.append(f"    {d:%m-%d %H:%M}({'月火水木金土日'[d.weekday()]}) 1時間足の始値 {hrows[t][0]} / 1分足の始値 {agg[t][0]} / "
+                             f"直前の終値 {prev_close.get(t)} / 直前の足から{gap_hours:.0f}時間後")
+        print(f"  買値始値がずれた時間 {len(bad)}本(うち、6時間以上の休場明けの最初の足: {gap_first}本)")
+        for ln in lines:
+            print(ln)
     print("\n結果: 問題なし" if ok else "\n結果: 要確認(上のNG・一致率を確認してください)")
     return 0 if ok else 1
 
