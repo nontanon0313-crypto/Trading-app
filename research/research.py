@@ -53,19 +53,19 @@ FDR_Q = 0.05
 
 
 # ---------- データ読み込み ----------
-def load_1m(con, sym, t0, t1):
+def load_1m(con, sym, t0, t1, table="m1"):
     if t1 > LOCK_END:
         raise SystemExit("2026年以降のデータは最終テスト用のため読み込めません")
     r = con.execute("SELECT v FROM meta WHERE k=?", (f"divisor_{sym}",)).fetchone()
     if not r:
         raise SystemExit(f"{sym}のデータがありません。先に fetch_dukascopy.py run を実行してください")
     div = float(r[0])
-    n = con.execute("SELECT COUNT(*) FROM m1 WHERE symbol=? AND ts>=? AND ts<?",
+    n = con.execute(f"SELECT COUNT(*) FROM {table} WHERE symbol=? AND ts>=? AND ts<?",
                     (sym, t0, t1)).fetchone()[0]
     if n == 0:
         raise SystemExit(f"{sym}の指定期間にデータがありません")
     arr = np.empty((n, 9), dtype=np.int64)
-    cur = con.execute("SELECT ts,bo,bh,bl,bc,ao,ah,al,ac FROM m1 "
+    cur = con.execute(f"SELECT ts,bo,bh,bl,bc,ao,ah,al,ac FROM {table} "
                       "WHERE symbol=? AND ts>=? AND ts<? ORDER BY ts", (sym, t0, t1))
     i = 0
     while True:

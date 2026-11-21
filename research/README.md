@@ -13,6 +13,7 @@ FXトレード検証ツール本体(`app/`など)とは別の、過去データ�
 | ファイル | 役割 |
 |---|---|
 | `fetch_dukascopy.py` | Dukascopyの1分足(買値・売値)を取得してDBに保存。`check` / `run` / `status` |
+| `fetch_hourly.py` | Dukascopyの1時間足(月ごとのファイル)を取得してDBのh1表に保存。`check` / `run`。1時間足・4時間足・日足の検証には、1分足(1銘柄約9〜13時間)の代わりに、これで足りる(1銘柄数分〜数十分の見込み) |
 | `fetch_macro.py` | FREDから米実質金利・VIX・雇用統計/CPI/FOMCの発表日を取得。`check` / `run` |
 | `rules.py` `env.py` | シグナルの定義(グループ1)と、環境認識(トレンド判定・ファンダメンタルズ) |
 | `research.py` | シグナルの検証(探索期間 `explore`、確認期間 `confirm`)。多重検定の補正つき |
@@ -23,6 +24,9 @@ FXトレード検証ツール本体(`app/`など)とは別の、過去データ�
 ## 主なコマンド
 ```
 python fetch_dukascopy.py run --symbols XAGUSD --workers 5
+python fetch_hourly.py check
+python fetch_hourly.py run
+python breakout.py explore --symbol USDJPY --base h1
 python fetch_macro.py run
 python breakout.py explore
 python fakeout.py compare

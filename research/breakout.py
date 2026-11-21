@@ -181,9 +181,9 @@ def summarize(net, gross, cost, mae, hold_min, years):
             "mae90": float(np.percentile(mae, 90)), "years_pos": pos, "years_tot": tot}
 
 
-def run(m1, verbose=True):
+def run(m1, verbose=True, tfs=None):
     rows = []
-    for tf in TIMEFRAMES:
+    for tf in (tfs or TIMEFRAMES):
         t0 = time.time()
         bars = R.resample(m1, tf)
         n = len(bars["ts"])
@@ -230,11 +230,12 @@ def show(rows, title, k=15):
 
 def cmd_explore(a):
     con = sqlite3.connect(R.DB_PATH)
-    m1 = R.load_1m(con, a.symbol, *R.EXPLORE)
+    hourly = a.base == "h1"
+    m1 = R.load_1m(con, a.symbol, *R.EXPLORE, table="h1" if hourly else "m1")
     d0 = dt.datetime.fromtimestamp(int(m1["ts"][0]), R.UTC).date()
     d1 = dt.datetime.fromtimestamp(int(m1["ts"][-1]), R.UTC).date()
-    print(f"[{a.symbol}] 探索期間のデータ: {d0}〜{d1} / 1分足 {len(m1['ts']):,}本", flush=True)
-    rows = run(m1)
+    print(f"[{a.symbol}] 探索期間のデータ: {d0}〜{d1} / {'1時間足' if hourly else '1分足'} {len(m1['ts']):,}本", flush=True)
+    rows = run(m1, tfs=[t for t in TIMEFRAMES if t >= 60] if hourly else None)
     main_rows = [r for r in rows if r["side"] == "合算"]
     flags = R.bh_flags(main_rows)
     for r, f in zip(main_rows, flags):
@@ -306,6 +307,7 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("explore")
     s.add_argument("--symbol", default="XAGUSD")
+    s.add_argument("--base", default="m1", choices=["m1", "h1"])
     s2 = sub.add_parser("detail")
     s2.add_argument("--symbol", default="XAGUSD")
     s2.add_argument("--tf", type=int, required=True)
