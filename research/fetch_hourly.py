@@ -85,24 +85,29 @@ def open_db():
 
 
 def aggregate_m1(con, sym, year, month):
-    """既存の1分足から、同じ月の1時間足を作る(確認用)。戻り値: {時刻: (bo,bh,bl,bc,ao,ah,al,ac)}"""
+    """既存の1分足から、同じ月の1時間足を作る(確認用)。戻り値: {時刻: (bo,bh,bl,bc,ao,ah,al,ac)}
+    1分足には、取引のない時間にも、値動きのない足(出来高0)が入っている。1時間足側と同じ基準で、
+    その時間の全ての足が「値動きなし・出来高0」の時間は除く。"""
     a, b = month_range(year, month)
-    rows = con.execute("SELECT ts,bo,bh,bl,bc,ao,ah,al,ac FROM m1 WHERE symbol=? AND ts>=? AND ts<? ORDER BY ts",
+    rows = con.execute("SELECT ts,bo,bh,bl,bc,ao,ah,al,ac,v FROM m1 WHERE symbol=? AND ts>=? AND ts<? ORDER BY ts",
                        (sym, a, b)).fetchall()
     out = {}
-    for ts, bo, bh, bl, bc, ao, ah, al, ac in rows:
+    busy = {}
+    for ts, bo, bh, bl, bc, ao, ah, al, ac, v in rows:
         k = ts - ts % 3600
+        if bo != bh or bo != bl or bo != bc or v > 0:
+            busy[k] = True
         if k not in out:
             out[k] = [bo, bh, bl, bc, ao, ah, al, ac]
         else:
-            v = out[k]
-            v[1] = max(v[1], bh)
-            v[2] = min(v[2], bl)
-            v[3] = bc
-            v[5] = max(v[5], ah)
-            v[6] = min(v[6], al)
-            v[7] = ac
-    return out
+            x = out[k]
+            x[1] = max(x[1], bh)
+            x[2] = min(x[2], bl)
+            x[3] = bc
+            x[5] = max(x[5], ah)
+            x[6] = min(x[6], al)
+            x[7] = ac
+    return {k: v for k, v in out.items() if k in busy}
 
 
 def fetch_retry(sym, year, month, keep_zero=False, tries=3):
@@ -189,6 +194,7 @@ def cmd_check(_a):
                 lines.append(f"    {d:%m-%d %H:%M}({'月火水木金土日'[d.weekday()]}) 1時間足の始値 {hrows[t][0]} / 1分足の始値 {agg[t][0]} / "
                              f"直前の終値 {prev_close.get(t)} / 直前の足から{gap_hours:.0f}時間後")
         print(f"  買値始値がずれた時間 {len(bad)}本(うち、6時間以上の休場明けの最初の足: {gap_first}本)")
+        print("  (1分足の始値は、休場明けの最初の足でも、直前の終値になっている。1時間足のほうが、ギャップを反映した実際の始値)")
         for ln in lines:
             print(ln)
     print("\n結果: 問題なし" if ok else "\n結果: 要確認(上のNG・一致率を確認してください)")
