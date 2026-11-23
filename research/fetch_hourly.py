@@ -13,12 +13,31 @@ import datetime as dt
 import sqlite3
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import fetch_dukascopy as FD
 
 UTC = dt.timezone.utc
 PROBE = (2023, 6)   # 形式の確認に使う月
+
+
+def _get(u, tries=3, timeout=45):
+    """503や応答待ちの失敗は、待ち時間を延ばして再試行する。404はデータ無し(空)として扱う。"""
+    err = None
+    for i in range(tries):
+        wait = (5, 15, 30)[i]
+        try:
+            req = FD.urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+            with FD.urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read()
+        except FD.urllib.error.HTTPError as e:
+            if e.code == 404:
+                return b""
+            err = e
+        except Exception as e:  # noqa
+            err = e
+        time.sleep(wait)
+    raise RuntimeError(f"取得失敗 {u}: {err}")
 
 
 def month_url(sym, year, month, side):
@@ -56,8 +75,8 @@ def fetch_month(sym, year, month, keep_zero=False):
     """買値・売値を取得して検証し、時刻で結合した行を返す。データ無しなら空リスト。
     取引のない時間の足(始値=高値=安値=終値で、出来高が0)は除く。keep_zero=Trueなら残す(確認用)。
     出来高が0でも、値動きのある足は、実際に取引のあった時間なので残す。"""
-    bid = decode_month(FD.http_get(month_url(sym, year, month, "BID")), year, month)
-    ask = decode_month(FD.http_get(month_url(sym, year, month, "ASK")), year, month)
+    bid = decode_month(_get(month_url(sym, year, month, "BID")), year, month)
+    ask = decode_month(_get(month_url(sym, year, month, "ASK")), year, month)
     if not bid or not ask:
         return []
     base = month_range(year, month)[0]
@@ -210,49 +229,49 @@ def months(start, end):
 
 def safe_fetch(sym, y, m):
     try:
-        return (y, m, fetch_month(sym, y, m), None)
+        return (sym, y, m, fetch_month(sym, y, m), None)
     except Exception as e:  # noqa
-        return (y, m, None, str(e))
+        return (sym, y, m, None, str(e))
 
 
 def cmd_run(a):
     syms = [s.strip().upper() for s in a.symbols.split(",")] if a.symbols else list(FD.RANGES)
-    start = dt.date.fromisoformat(a.start)
-    today = dt.datetime.now(UTC).date()
-    end = (today.replace(day=1) - dt.timedelta(days=1))  # 前月まで(当月は未完了)
-    con = open_db()
-    failed = 0
     for sym in syms:
         if sym not in FD.RANGES:
             print(f"未対応の銘柄です: {sym}")
             return 1
+    start = dt.date.fromisoformat(a.start)
+    today = dt.datetime.now(UTC).date()
+    end = (today.replace(day=1) - dt.timedelta(days=1))  # 前月まで(当月は未完了)
+    con = open_db()
+    todo = []
+    for sym in syms:
         done = {r[0] for r in con.execute("SELECT ym FROM h1_months WHERE symbol=?", (sym,))}
-        todo = [(y, m) for y, m in months(start, end) if f"{y}-{m:02d}" not in done]
-        print(f"[{sym}] 未取得 {len(todo)}か月", flush=True)
-        t0 = time.time()
-        n_ok = n_fail = 0
-        with ThreadPoolExecutor(max_workers=a.workers) as ex:
-            for i in range(0, len(todo), a.workers * 3):
-                chunk = todo[i:i + a.workers * 3]
-                for y, m, rows, err in ex.map(lambda ym: safe_fetch(sym, *ym), chunk):
-                    ym = f"{y}-{m:02d}"
-                    if err:
-                        n_fail += 1
-                        print(f"  失敗 {ym}: {err[:120]}", flush=True)
-                        continue
-                    if rows:
-                        FD.get_divisor(con, sym, rows)
-                        con.executemany("INSERT OR REPLACE INTO h1 VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                                        [(sym, *r) for r in rows])
-                        con.execute("INSERT OR REPLACE INTO h1_months VALUES(?,?,?,?)", (sym, ym, "ok", len(rows)))
-                        n_ok += 1
-                    else:
-                        con.execute("INSERT OR REPLACE INTO h1_months VALUES(?,?,?,?)", (sym, ym, "empty", 0))
-                con.commit()
-                print(f"  {sym} {min(i + len(chunk), len(todo))}/{len(todo)}か月 成功{n_ok} 失敗{n_fail} "
-                      f"({time.time() - t0:.0f}秒)", flush=True)
-        failed += n_fail
-        print(f"[{sym}] 終了: 取得 {n_ok}か月 / 失敗 {n_fail}か月", flush=True)
+        todo += [(sym, y, m) for y, m in months(start, end) if f"{y}-{m:02d}" not in done]
+    print(f"未取得 {len(todo)}か月(同時{a.workers}本)", flush=True)
+    stats = {s: [0, 0] for s in syms}
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=a.workers) as ex:
+        futs = [ex.submit(safe_fetch, *t) for t in todo]
+        for k, fu in enumerate(as_completed(futs), start=1):
+            sym, y, m, rows, err = fu.result()
+            ym = f"{y}-{m:02d}"
+            if err:
+                stats[sym][1] += 1
+                print(f"  失敗 {sym} {ym} ({k}/{len(todo)}, {time.time() - t0:.0f}秒): {err[-80:]}", flush=True)
+                continue
+            if rows:
+                FD.get_divisor(con, sym, rows)
+                con.executemany("INSERT OR REPLACE INTO h1 VALUES(?,?,?,?,?,?,?,?,?,?,?)", [(sym, *r) for r in rows])
+                con.execute("INSERT OR REPLACE INTO h1_months VALUES(?,?,?,?)", (sym, ym, "ok", len(rows)))
+            else:
+                con.execute("INSERT OR REPLACE INTO h1_months VALUES(?,?,?,?)", (sym, ym, "empty", 0))
+            con.commit()
+            stats[sym][0] += 1
+            print(f"  成功 {sym} {ym} ({k}/{len(todo)}, {time.time() - t0:.0f}秒)", flush=True)
+    failed = sum(v[1] for v in stats.values())
+    for sym, (ok, ng) in stats.items():
+        print(f"[{sym}] 終了: 取得 {ok}か月 / 失敗 {ng}か月", flush=True)
     return 2 if failed else 0
 
 
@@ -263,7 +282,7 @@ def main():
     r = sub.add_parser("run")
     r.add_argument("--symbols")
     r.add_argument("--start", default="2021-01-01")
-    r.add_argument("--workers", type=int, default=4)
+    r.add_argument("--workers", type=int, default=3)
     a = p.parse_args()
     sys.exit({"check": cmd_check, "run": cmd_run}[a.cmd](a))
 
