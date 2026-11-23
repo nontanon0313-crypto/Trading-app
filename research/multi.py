@@ -2,6 +2,8 @@
 """全銘柄をまとめた、ブレイク売買の検証(1時間足・4時間足・日足)。1時間足のデータ(fetch_hourly.py)を使う。
 
   python multi.py explore        # 探索期間(2021〜2023年)で、足×抜けの定義ごとに、全銘柄の売買をまとめて検証
+  python multi.py confirm --tf 1440 --defn 維持1
+                                 # 確認用の期間(2024〜2025年)で、探索で選んだ1つの候補だけを検証(1回だけ)
 
 定義はbreakout.pyと同じ(波動38.2%の節目、ブレイクでエントリー、逆ブレイクで決済、損切りなし、
 次の足の始値で約定、買いはask・売りはbid)。銘柄ごとの売買を、そのまま(bpsで)合わせる。
@@ -109,12 +111,68 @@ def cmd_explore(a):
     return 0
 
 
+PASS_RULE = "コスト後の平均がプラス、片側p値<0.05、プラスの銘柄が過半数、2024年・2025年ともプラス"
+
+
+def cmd_confirm(a):
+    """確認用の期間で、探索で選んだ1つの候補だけを検証する。合格基準は、結果を見る前に固定している。
+    状態をそろえるため、探索期間の前から価格を読み込み、確認用の期間にエントリーした売買だけを数える。"""
+    con = sqlite3.connect(R.DB_PATH)
+    syms = load_symbols(con)
+    if not syms:
+        raise SystemExit("1時間足のデータがありません")
+    t_start, t_end = R.CONFIRM
+    per = {}
+    print(f"候補: {a.tf}分足・{a.defn} / 確認用の期間: 2024-01-01〜2025-12-31 / 合格基準: {PASS_RULE}\n")
+    for sym in syms:
+        try:
+            m = R.load_1m(con, sym, R.EXPLORE[0], t_end, table="h1")
+        except SystemExit:
+            continue
+        bars = R.resample(m, a.tf)
+        n = len(bars["ts"])
+        hp, lp = B.zigzag_levels(bars["bh"], bars["bl"])
+        variants = B.break_variants(bars["bh"], bars["bl"], bars["bc"], hp, lp)
+        if a.defn not in variants:
+            raise SystemExit(f"定義名が違います。使えるもの: {', '.join(variants)}")
+        up, dn = variants[a.defn]
+        trades, _ = B.simulate(up, dn, n)
+        trades = [t for t in trades if bars["ts"][t[1]] >= t_start]
+        n_bars = int((bars["ts"] >= t_start).sum())
+        if len(trades) < 3:
+            print(f"{sym}: 売買が少なすぎます({len(trades)}回)")
+            continue
+        d, net, gross, cost, mae, hold, years = B.trade_results(trades, bars)
+        per[sym] = (net, gross, cost, mae, hold, years)
+        print(f"{sym}: 確認用の期間の足 {n_bars}本 / 売買 {len(trades)}回", flush=True)
+    cat = [np.concatenate([p[i] for p in per.values()]) for i in range(6)]
+    s = B.summarize(*cat)
+    if not s:
+        raise SystemExit("売買が少なすぎて、検証できません")
+    pos_syms = sum(1 for p in per.values() if p[0].mean() > 0)
+    yrs = cat[5]
+    y_means = {int(y): float(cat[0][yrs == y].mean()) for y in np.unique(yrs)}
+    print(f"\n全銘柄をまとめた結果: 売買 {s['n']}回 / コスト後の平均 {s['net']:+.1f}bps / 中値の平均 {s['gross']:+.1f}bps / "
+          f"コスト {s['cost']:.1f}bps")
+    print(f"t値 {s['t']:+.2f} / 片側p値 {s['p']:.4f} / 勝率 {s['win'] * 100:.0f}% / PF {s['pf']:.2f}")
+    print("年ごとの平均: " + " ".join(f"{y}年 {v:+.1f}bps({int((yrs == y).sum())}回)" for y, v in sorted(y_means.items())))
+    print("銘柄ごとの平均: " + " ".join(f"{k}:{v[0].mean():+.0f}({len(v[0])}回)" for k, v in sorted(per.items())))
+    print(f"プラスの銘柄: {pos_syms}/{len(per)}")
+    ok = (s["net"] > 0 and s["p"] < 0.05 and pos_syms > len(per) / 2 and all(v > 0 for v in y_means.values())
+          and len(y_means) >= 2)
+    print("\n判定: " + ("合格(確認用の期間でも、基準を満たした)" if ok else "不合格(基準を満たさなかった)"))
+    return 0
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("explore")
+    c = sub.add_parser("confirm")
+    c.add_argument("--tf", type=int, required=True)
+    c.add_argument("--defn", required=True)
     a = p.parse_args()
-    sys.exit({"explore": cmd_explore}[a.cmd](a))
+    sys.exit({"explore": cmd_explore, "confirm": cmd_confirm}[a.cmd](a))
 
 
 if __name__ == "__main__":
