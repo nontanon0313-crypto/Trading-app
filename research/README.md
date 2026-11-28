@@ -18,6 +18,7 @@ FXトレード検証ツール本体(`app/`など)とは別の、過去データ�
 | `rules.py` `env.py` | シグナルの定義(グループ1)と、環境認識(トレンド判定・ファンダメンタルズ) |
 | `research.py` | シグナルの検証(探索期間 `explore`、確認期間 `confirm`)。多重検定の補正つき |
 | `breakout.py` | ブレイクで入り、逆ブレイクで決済する売買の検証(`explore` / `detail`) |
+| `trend.py` | トレンド(より大きな時間足の、現在の1波の向き)を組み込んだ売買の検証。トレンドあり・なしを比較し、日・月・年の複利収益で表示。`explore` / `detail` |
 | `multi.py` | 全銘柄をまとめた、ブレイク売買の検証(1時間足・4時間足・日足)。1時間足のデータを使う。`explore` / `confirm`(確認用の期間で、選んだ1つの候補だけを検証) |
 | `fakeout.py` | ダマシの測定。`compare` `fractal` `sequence` `volatility` `levels` `strong` `strongbreak` |
 | `papertrade.py` | 仮想売買(口座なしの前向き検証)。`selftest` `init` `update` |
